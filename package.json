@@ -1,0 +1,113 @@
+{
+  "name": "game-dev-assistant",
+  "version": "1.0.0",
+  "description": "Windows向けゲーム開発支援ツール",
+  "main": "dist-electron/main.js",
+  "author": "Game Dev Assistant",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sohfuji04-pixel/game-dev-assistant.git"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "dist": "vite build && electron-builder --win --publish never",
+    "dist:publish": "vite build && electron-builder --win --publish always",
+    "electron:dev": "vite",
+    "electron:build": "npm run dist",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,json,css,md,yml}\"",
+    "typecheck": "tsc -p tsconfig.web.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "version:tag": "node -e \"const v=require('./package.json').version; console.log('v'+v)\""
+  },
+  "dependencies": {
+    "chokidar": "^4.0.3",
+    "electron-updater": "^6.3.9",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "simple-git": "^3.27.0",
+    "sql.js": "^1.14.1",
+    "uuid": "^11.0.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.19.0",
+    "@types/node": "^22.10.7",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "@types/sql.js": "^1.4.11",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.22.0",
+    "@typescript-eslint/parser": "^8.22.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^34.0.2",
+    "electron-builder": "^25.1.8",
+    "eslint": "^9.19.0",
+    "eslint-config-prettier": "^10.0.1",
+    "eslint-plugin-react": "^7.37.4",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.11",
+    "vite-plugin-electron": "^0.29.0",
+    "vite-plugin-electron-renderer": "^0.14.6"
+  },
+  "build": {
+    "appId": "com.gamedev.assistant",
+    "productName": "Game Dev Assistant",
+    "copyright": "Copyright © Game Dev Assistant",
+    "directories": {
+      "output": "release",
+      "buildResources": "resources"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources",
+        "to": "resources",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "${productName}-${version}-Setup.${ext}",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Game Dev Assistant",
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "${productName}-${version}-Setup.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "releaseType": "release"
+      }
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "**/node_modules/sql.js/dist/*.wasm"
+    ]
+  },
+  "allowScripts": {
+    "electron@34.5.8": true,
+    "esbuild@0.25.12": true
+  }
+}
