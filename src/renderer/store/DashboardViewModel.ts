@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ダッシュボード ViewModel
  */
 import { ApiClient } from '../services/ApiClient';
@@ -20,6 +20,8 @@ export class DashboardViewModel extends ViewModelBase {
   message = '';
   cursorStatus: ToolConnectionStatus | null = null;
   gitStatus: ToolConnectionStatus | null = null;
+  blenderStatus: ToolConnectionStatus | null = null;
+  unityStatus: ToolConnectionStatus | null = null;
 
   constructor(private readonly app: AppViewModel) {
     super();
@@ -49,6 +51,8 @@ export class DashboardViewModel extends ViewModelBase {
       const snapshot = await ApiClient.checkToolsConnections();
       this.cursorStatus = snapshot.cursor;
       this.gitStatus = snapshot.git;
+      this.blenderStatus = snapshot.blender;
+      this.unityStatus = snapshot.unity;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.message = `接続確認に失敗: ${message}`;

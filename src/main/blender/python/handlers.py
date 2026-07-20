@@ -9,7 +9,7 @@ from typing import Any, Callable, Dict
 
 import bpy
 
-from . import materials, mesh_ops, modifiers, objects, render_export, templates, world_ops
+from . import image, materials, mesh_ops, modifiers, objects, render_export, templates, viewport, world_ops
 
 Handler = Callable[[Dict[str, Any]], Any]
 
@@ -282,6 +282,21 @@ def render_still(p: Dict[str, Any]):
 @method("render.animation")
 def render_animation(p: Dict[str, Any]):
     return render_export.render_animation(p)
+
+
+@method("viewport.preview")
+def viewport_preview(p: Dict[str, Any]):
+    return viewport.capture_preview(p)
+
+
+@method("image.import_as_plane")
+def image_import_as_plane(p: Dict[str, Any]):
+    return image.import_as_plane(p)
+
+
+@method("image.generate_from_photo")
+def image_generate_from_photo(p: Dict[str, Any]):
+    return image.generate_from_photo(p)
 
 
 @method("export.blend")

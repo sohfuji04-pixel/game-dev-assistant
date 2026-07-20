@@ -3,6 +3,7 @@
  * ぽこぽこの serve-local.mjs 相当を Electron 内に内蔵する。
  */
 import http from 'node:http';
+import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -29,6 +30,9 @@ const MIME: Record<string, string> = {
   '.map': 'application/json',
 };
 
+const DEFAULT_PORT = 8780;
+const PORT_ATTEMPTS = 20;
+
 export interface DevServerStatus {
   running: boolean;
   port: number;
@@ -37,12 +41,16 @@ export interface DevServerStatus {
   mode: 'builtin' | 'script' | 'idle';
 }
 
+function isAddrInUse(err: unknown): boolean {
+  return Boolean(err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'EADDRINUSE');
+}
+
 export class DevServerService {
   private server: http.Server | null = null;
   private child: ChildProcess | null = null;
   private status: DevServerStatus = {
     running: false,
-    port: 8780,
+    port: DEFAULT_PORT,
     root: null,
     baseUrl: null,
     mode: 'idle',
@@ -57,31 +65,46 @@ export class DevServerService {
   /**
    * プロジェクトルートを静的配信する（アプリ内埋め込み用は常に内蔵サーバ）
    */
-  async start(projectRoot: string, port = 8780, options?: { preferScript?: boolean }): Promise<DevServerStatus> {
+  async start(projectRoot: string, port = DEFAULT_PORT, options?: { preferScript?: boolean }): Promise<DevServerStatus> {
     await this.stop();
+    // Windows で listen 解除が遅れることがあるため短く待つ
+    await sleep(150);
 
     const scriptPath = path.join(projectRoot, 'scripts', 'serve-local.mjs');
     if (options?.preferScript && fs.existsSync(scriptPath)) {
       try {
-        return await this.startViaScript(projectRoot, scriptPath, port);
+        const freePort = await this.findFreePort(port);
+        return await this.startViaScript(projectRoot, scriptPath, freePort);
       } catch (error) {
         this.log.warn('hub', 'script サーバ失敗、内蔵へ切替', String(error));
         await this.stop();
+        await sleep(150);
       }
     }
-    return this.startBuiltin(projectRoot, port);
+    return this.startBuiltinWithFallback(projectRoot, port);
   }
 
   async stop(): Promise<DevServerStatus> {
     if (this.child) {
-      this.child.kill();
+      try {
+        this.child.kill();
+      } catch {
+        /* ignore */
+      }
       this.child = null;
     }
     if (this.server) {
-      await new Promise<void>((resolve) => {
-        this.server?.close(() => resolve());
-      });
+      const server = this.server;
       this.server = null;
+      await new Promise<void>((resolve) => {
+        const done = () => resolve();
+        // Node 18.2+: 既存接続を切ってポート解放を早める
+        if (typeof (server as http.Server & { closeAllConnections?: () => void }).closeAllConnections === 'function') {
+          (server as http.Server & { closeAllConnections: () => void }).closeAllConnections();
+        }
+        server.close(() => done());
+        setTimeout(done, 500);
+      });
     }
     this.status = {
       running: false,
@@ -92,6 +115,25 @@ export class DevServerService {
     };
     this.log.info('hub', '開発サーバを停止しました');
     return this.getStatus();
+  }
+
+  private async findFreePort(startPort: number): Promise<number> {
+    for (let i = 0; i < PORT_ATTEMPTS; i++) {
+      const port = startPort + i;
+      if (await this.canListen(port)) return port;
+    }
+    throw new Error(`ポート ${startPort}〜${startPort + PORT_ATTEMPTS - 1} がすべて使用中です`);
+  }
+
+  private canListen(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const tester = net.createServer();
+      tester.once('error', () => resolve(false));
+      tester.once('listening', () => {
+        tester.close(() => resolve(true));
+      });
+      tester.listen(port, '127.0.0.1');
+    });
   }
 
   private startViaScript(root: string, scriptPath: string, port: number): Promise<DevServerStatus> {
@@ -136,7 +178,6 @@ export class DevServerService {
       });
       child.on('exit', (code) => {
         if (!settled) {
-          // スクリプトが即終了した場合は内蔵にフォールバックしない（呼び出し側で）
           settled = true;
           reject(new Error(`serve-local.mjs が終了しました (code=${code})`));
         }
@@ -146,9 +187,29 @@ export class DevServerService {
         }
       });
 
-      // 出力が無くても短時間後に ready とみなす（多くの実装は起動後すぐ listen）
       setTimeout(ok, 800);
     });
+  }
+
+  private async startBuiltinWithFallback(root: string, startPort: number): Promise<DevServerStatus> {
+    let lastError: unknown;
+    for (let i = 0; i < PORT_ATTEMPTS; i++) {
+      const port = startPort + i;
+      try {
+        return await this.startBuiltin(root, port);
+      } catch (err) {
+        lastError = err;
+        if (!isAddrInUse(err)) throw err;
+        this.log.warn('hub', `ポート ${port} は使用中です。次のポートを試します`);
+      }
+    }
+    const msg =
+      lastError instanceof Error
+        ? lastError.message
+        : `ポート ${startPort} 付近がすべて使用中です`;
+    throw new Error(
+      `開発サーバを起動できません（${msg}）。他の Game Dev Assistant / npm run hub を終了するか、「配信停止」後に再試行してください。`,
+    );
   }
 
   private startBuiltin(root: string, port: number): Promise<DevServerStatus> {
@@ -184,8 +245,19 @@ export class DevServerService {
         }
       });
 
-      server.once('error', (err) => reject(err));
+      const onError = (err: Error) => {
+        server.off('error', onError);
+        try {
+          server.close();
+        } catch {
+          /* ignore */
+        }
+        reject(err);
+      };
+
+      server.once('error', onError);
       server.listen(port, '127.0.0.1', () => {
+        server.off('error', onError);
         this.server = server;
         this.status = {
           running: true,
@@ -207,4 +279,8 @@ export class DevServerService {
     if (!full.startsWith(resolvedBase)) return null;
     return full;
   }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

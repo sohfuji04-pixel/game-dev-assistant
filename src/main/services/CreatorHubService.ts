@@ -1,6 +1,6 @@
 /**
  * 創作ツールハブ検出・起動サービス
- * ぽこぽこ creator-hub パターンを汎用化し、プロジェクト内ツールを一覧化する。
+ * プロジェクト内 HTML ツールをポート無しのアプリ内画面で開く。
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,6 +8,7 @@ import { shell } from 'electron';
 import type { CreatorPipelineScript, CreatorTool, HubScanResult } from '../../shared/types';
 import type { DevServerService } from './DevServerService';
 import type { LogService } from './LogService';
+import type { ProjectFileProtocol } from './ProjectFileProtocol';
 
 /** ぽこぽこ向け既定ツール定義 */
 const POKOPOKO_TOOLS: CreatorTool[] = [
@@ -86,6 +87,7 @@ const PIPELINE_CANDIDATES: CreatorPipelineScript[] = [
 export class CreatorHubService {
   constructor(
     private readonly devServer: DevServerService,
+    private readonly projectFiles: ProjectFileProtocol,
     private readonly log: LogService,
   ) {}
 
@@ -103,6 +105,8 @@ export class CreatorHubService {
         previewPages: [],
       };
     }
+
+    this.projectFiles.setProjectRoot(projectRoot);
 
     const pkg = this.readPackageScripts(projectRoot);
     const hasHub = fs.existsSync(path.join(projectRoot, 'creator-hub.html'));
@@ -131,30 +135,56 @@ export class CreatorHubService {
     };
   }
 
-  async ensureServer(projectRoot: string, port = 8780) {
-    const status = this.devServer.getStatus();
-    if (status.running && status.root === projectRoot && status.baseUrl) {
-      return status;
+  /**
+   * ポート配信は廃止。互換 API のため残すが、listen は一切しない。
+   */
+  async ensureServer(projectRoot: string, _port = 8780) {
+    this.projectFiles.setProjectRoot(projectRoot);
+    // 既存の HTTP サーバがあれば止める（EADDRINUSE の原因を残さない）
+    try {
+      await this.devServer.stop();
+    } catch {
+      /* ignore */
     }
-    // アプリ内埋め込みのため内蔵サーバのみ使用（serve-local のブラウザ自動起動を避ける）
-    return this.devServer.start(projectRoot, port, { preferScript: false });
+    return {
+      running: false,
+      port: 0,
+      root: projectRoot,
+      baseUrl: null,
+      mode: 'idle' as const,
+    };
   }
 
   /**
-   * ツール URL を解決（アプリ内表示用。外部ブラウザは開かない）
+   * ツール URL を解決（アプリ内専用画面・ポート不要）
    */
   async resolveToolUrl(
     projectRoot: string,
     htmlPath: string,
   ): Promise<{ success: boolean; url: string; message: string }> {
-    const status = await this.ensureServer(projectRoot);
-    if (!status.baseUrl) {
-      return { success: false, url: '', message: '開発サーバを起動できませんでした' };
+    try {
+      if (!projectRoot || !fs.existsSync(projectRoot)) {
+        return { success: false, url: '', message: 'プロジェクトフォルダが見つかりません' };
+      }
+      const normalized = htmlPath.replace(/\\/g, '/').replace(/^\//, '');
+      const absolute = path.join(projectRoot, ...normalized.split('/'));
+      if (!fs.existsSync(absolute)) {
+        return { success: false, url: '', message: `ファイルがありません: ${normalized}` };
+      }
+
+      this.projectFiles.setProjectRoot(projectRoot);
+      const url = this.projectFiles.toAppUrl(normalized);
+      this.log.info('hub', `アプリ内ツール画面: ${normalized}`, url);
+      return {
+        success: true,
+        url,
+        message: `アプリ内画面で表示: ${normalized}`,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.log.error('hub', 'ツール URL 解決失敗', message);
+      return { success: false, url: '', message };
     }
-    const normalized = htmlPath.replace(/\\/g, '/').replace(/^\//, '');
-    const url = `${status.baseUrl}/${normalized}`;
-    this.log.info('hub', `ツール URL 解決: ${normalized}`, url);
-    return { success: true, url, message: `アプリ内で表示: ${normalized}` };
   }
 
   /** 互換: resolveToolUrl のエイリアス */
@@ -168,10 +198,26 @@ export class CreatorHubService {
     return this.resolveToolUrl(projectRoot, page);
   }
 
-  /** 必要時のみ外部ブラウザで開く */
-  async openInExternalBrowser(url: string): Promise<void> {
-    await shell.openExternal(url);
-    this.log.info('hub', '外部ブラウザで開きました', url);
+  /** 外部表示: ポートを使わず OS 既定アプリで HTML を開く */
+  async openInExternalBrowser(urlOrPath: string, projectRoot?: string): Promise<void> {
+    let target = urlOrPath;
+    if (urlOrPath.startsWith('gda-project://') && projectRoot) {
+      try {
+        const u = new URL(urlOrPath);
+        const rel = decodeURIComponent(u.pathname).replace(/^\/+/, '');
+        target = path.join(projectRoot, ...rel.split('/'));
+      } catch {
+        /* keep urlOrPath */
+      }
+    }
+    if (fs.existsSync(target)) {
+      const err = await shell.openPath(target);
+      if (err) throw new Error(err);
+      this.log.info('hub', '外部アプリで開きました', target);
+      return;
+    }
+    await shell.openExternal(urlOrPath);
+    this.log.info('hub', '外部ブラウザで開きました', urlOrPath);
   }
 
   async stopServer() {

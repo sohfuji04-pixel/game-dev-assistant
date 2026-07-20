@@ -1,35 +1,43 @@
-﻿/**
+/**
  * サイドバーナビゲーション（View）
- * セクション分けで目的の画面へ素早く移動できるようにする。
  */
 import type { AppPage, AppViewModel } from '../store/AppViewModel';
 
-const NAV_GROUPS: Array<{
-  label: string;
-  items: Array<{ id: AppPage; label: string; hint?: string }>;
-}> = [
+type NavItem = { kind: 'page'; id: AppPage; label: string; hint?: string };
+
+const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
   {
     label: 'メイン',
     items: [
-      { id: 'dashboard', label: 'ダッシュボード', hint: '1' },
-      { id: 'hub', label: '創作ツール', hint: '2' },
+      { kind: 'page', id: 'dashboard', label: 'ダッシュボード', hint: '1' },
+      { kind: 'page', id: 'hub', label: '創作ツール', hint: '2' },
+    ],
+  },
+  {
+    label: 'AI',
+    items: [
+      { kind: 'page', id: 'chatgpt', label: 'ChatGPT', hint: '3' },
+      { kind: 'page', id: 'blender', label: 'Blender AI' },
+      { kind: 'page', id: 'unity', label: 'Unity AI' },
+      { kind: 'page', id: 'prompt-builder', label: 'Prompt Builder' },
+      { kind: 'page', id: 'image-ai', label: 'Image AI' },
+      { kind: 'page', id: 'vision-ai', label: 'Vision AI' },
     ],
   },
   {
     label: '開発',
     items: [
-      { id: 'blender', label: 'Blender AI', hint: '3' },
-      { id: 'unity', label: 'Unity AI', hint: '4' },
-      { id: 'cursor', label: 'Cursor 連携', hint: '5' },
-      { id: 'git', label: 'Git', hint: '6' },
-      { id: 'assets', label: 'Assets', hint: '7' },
+      { kind: 'page', id: 'cursor', label: 'Cursor 連携', hint: '5' },
+      { kind: 'page', id: 'git', label: 'Git', hint: '6' },
+      { kind: 'page', id: 'assets', label: 'Assets', hint: '7' },
+      { kind: 'page', id: 'memory', label: 'Project Memory' },
     ],
   },
   {
-    label: 'システム',
+    label: '設定',
     items: [
-      { id: 'logs', label: 'ログ', hint: '8' },
-      { id: 'settings', label: '設定', hint: '9' },
+      { kind: 'page', id: 'logs', label: 'ログ', hint: '8' },
+      { kind: 'page', id: 'settings', label: '設定', hint: '9' },
     ],
   },
 ];
@@ -43,24 +51,33 @@ export function Sidebar({ vm }: Props) {
     <aside className="sidebar">
       <div className="brand">
         <h1>Game Dev Assistant</h1>
-        <p>ゲーム開発支援ツール</p>
+        <p>ゲーム開発専用 AI 統合環境</p>
       </div>
 
       {NAV_GROUPS.map((group) => (
         <div key={group.label} className="nav-group">
           <div className="nav-group-label">{group.label}</div>
-          {group.items.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`nav-btn${vm.page === item.id ? ' active' : ''}`}
-              onClick={() => vm.setPage(item.id)}
-              title={item.hint ? `Ctrl+${item.hint}` : undefined}
-            >
-              <span>{item.label}</span>
-              {item.hint && <kbd className="nav-kbd">{item.hint}</kbd>}
-            </button>
-          ))}
+          {group.items.map((item) => {
+            const active = vm.page === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                className={`nav-btn${active ? ' active' : ''}`}
+                onClick={() => {
+                  if (item.id === 'hub') {
+                    vm.openHubOverview();
+                    return;
+                  }
+                  vm.setPage(item.id);
+                }}
+                title={item.hint ? `Ctrl+${item.hint}` : undefined}
+              >
+                <span>{item.label}</span>
+                {item.hint && <kbd className="nav-kbd">{item.hint}</kbd>}
+              </button>
+            );
+          })}
         </div>
       ))}
 

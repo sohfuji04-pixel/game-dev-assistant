@@ -238,6 +238,60 @@ export class BlenderConnectionService extends EventEmitter {
     return { ok: true, path: exe, message: 'Blender.exe を確認済み' };
   }
 
+  /**
+   * ダッシュボード用プローブ。
+   * 既に接続中ならその状態を返し、未接続なら短時間だけ接続を試す（成功後は切断）。
+   */
+  async probeConnection(): Promise<import('../../shared/types').ToolConnectionStatus> {
+    const checkedAt = new Date().toISOString();
+    const exe = this.checkExe();
+    if (this.status.connected) {
+      return {
+        ok: true,
+        tool: 'blender',
+        path: exe.path || `${this.status.host}:${this.status.port}`,
+        version: this.status.blenderVersion ?? undefined,
+        live: true,
+        message: `ブリッジ接続中（${this.status.blenderVersion ?? 'Blender'}）`,
+        checkedAt,
+      };
+    }
+    if (!exe.ok) {
+      return {
+        ok: false,
+        tool: 'blender',
+        path: exe.path,
+        live: false,
+        message: exe.message,
+        checkedAt,
+      };
+    }
+    try {
+      await this.connect();
+      const version = this.status.blenderVersion ?? undefined;
+      await this.disconnect();
+      return {
+        ok: true,
+        tool: 'blender',
+        path: exe.path,
+        version,
+        live: false,
+        message: `exe・ブリッジともに利用可（${version ?? '接続確認済'}）`,
+        checkedAt,
+      };
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false,
+        tool: 'blender',
+        path: exe.path,
+        live: false,
+        message: `exe は見つかったがブリッジ未接続（${detail}）`,
+        checkedAt,
+      };
+    }
+  }
+
   async call(method: string, params: Record<string, unknown> = {}, timeoutMs = 60000): Promise<unknown> {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       throw new Error('Blender に接続されていません。先に「接続」または「Blender起動」を実行してください。');

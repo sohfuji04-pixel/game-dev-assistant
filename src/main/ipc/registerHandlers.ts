@@ -5,10 +5,11 @@
 import { app, dialog, ipcMain, shell, type BrowserWindow } from 'electron';
 import path from 'node:path';
 import { IpcChannels } from '../../shared/ipcChannels';
-import type { AppSettings, AssetType } from '../../shared/types';
+import type { AppSettings, AssetType, AiChatMode } from '../../shared/types';
 import { GAME_TEMPLATES } from '../../shared/blender/templates';
 import { UNITY_QUICK_COMMANDS } from '../../shared/unity/unityMethods';
 import type { AppServices } from '../main';
+import { SECRET_OPENAI_KEY } from '../security/SecretStore';
 import { AssetService } from '../services/AssetService';
 import { BuildService } from '../services/BuildService';
 import { CursorService } from '../services/CursorService';
@@ -24,10 +25,16 @@ export function registerIpcHandlers(services: AppServices, getWindow: GetWindow)
     db,
     log,
     settings,
+    secrets,
+    chatGpt,
+    promptBuilder,
+    projectMemory,
     watcher,
     updater,
     plugins,
     devServer,
+    projectFiles,
+    toolWorkspace,
     blender,
     blenderChat,
     unity,
@@ -38,7 +45,7 @@ export function registerIpcHandlers(services: AppServices, getWindow: GetWindow)
   const git = new GitService(settings, log);
   const assets = new AssetService(db, settings, log);
   const build = new BuildService(settings, log);
-  const hub = new CreatorHubService(devServer, log);
+  const hub = new CreatorHubService(devServer, projectFiles, log);
   const runner = new ToolRunnerService(log);
 
   // --- App ---
@@ -54,12 +61,23 @@ export function registerIpcHandlers(services: AppServices, getWindow: GetWindow)
   });
 
   // --- Settings ---
-  ipcMain.handle(IpcChannels.SETTINGS_GET, () => settings.get());
-  ipcMain.handle(IpcChannels.SETTINGS_SET, (_e, partial: Partial<AppSettings>) => {
-    const next = settings.set(partial);
-    log.info('settings', '設定を更新しました');
-    return next;
+  ipcMain.handle(IpcChannels.SETTINGS_GET, () => {
+    const s = settings.get();
+    // 実キーはレンダラーに返さない（マスクのみ）
+    return { ...s, openaiApiKey: secrets.mask(SECRET_OPENAI_KEY) };
   });
+  ipcMain.handle(IpcChannels.SETTINGS_SET, (_e, partial: Partial<AppSettings>) => {
+    const { openaiApiKey: _ignored, ...rest } = partial;
+    const next = settings.set(rest);
+    log.info('settings', '設定を更新しました');
+    return { ...next, openaiApiKey: secrets.mask(SECRET_OPENAI_KEY) };
+  });
+  ipcMain.handle(IpcChannels.SETTINGS_SET_OPENAI_KEY, (_e, key: string) => {
+    secrets.set(SECRET_OPENAI_KEY, (key ?? '').trim());
+    settings.set({ openaiApiKey: '' });
+    return { ok: true, mask: secrets.mask(SECRET_OPENAI_KEY) };
+  });
+  ipcMain.handle(IpcChannels.SETTINGS_GET_OPENAI_KEY_MASK, () => secrets.mask(SECRET_OPENAI_KEY));
   ipcMain.handle(
     IpcChannels.SETTINGS_SELECT_PATH,
     async (_e, options: { title?: string; filters?: Electron.FileFilter[]; directory?: boolean }) => {
@@ -72,6 +90,64 @@ export function registerIpcHandlers(services: AppServices, getWindow: GetWindow)
       if (result.canceled || result.filePaths.length === 0) return null;
       return result.filePaths[0];
     },
+  );
+
+  // --- ChatGPT ---
+  ipcMain.handle(IpcChannels.CHAT_THREADS, (_e, query?: string) => chatGpt.listThreads(query));
+  ipcMain.handle(IpcChannels.CHAT_MESSAGES, (_e, threadId: string) => chatGpt.getMessages(threadId));
+  ipcMain.handle(IpcChannels.CHAT_CREATE, (_e, mode?: AiChatMode, projectPath?: string | null) =>
+    chatGpt.createThread(mode ?? 'gamedev', projectPath),
+  );
+  ipcMain.handle(IpcChannels.CHAT_DELETE, (_e, threadId: string) => {
+    chatGpt.deleteThread(threadId);
+    return true;
+  });
+  ipcMain.handle(IpcChannels.CHAT_SET_MODE, (_e, threadId: string, mode: AiChatMode) => {
+    chatGpt.setMode(threadId, mode);
+    return true;
+  });
+  ipcMain.handle(
+    IpcChannels.CHAT_SEND,
+    (_e, threadId: string, content: string, projectPath?: string | null) =>
+      chatGpt.send(threadId, content, projectPath),
+  );
+  ipcMain.handle(IpcChannels.CHAT_STOP, (_e, threadId: string) => chatGpt.stop(threadId));
+  ipcMain.handle(
+    IpcChannels.CHAT_REGENERATE,
+    (_e, threadId: string, projectPath?: string | null) =>
+      chatGpt.regenerate(threadId, projectPath),
+  );
+
+  // --- Prompt Builder ---
+  ipcMain.handle(
+    IpcChannels.PROMPT_BUILD,
+    (
+      _e,
+      input: {
+        gameContent: string;
+        workContent: string;
+        language: string;
+        projectPath?: string | null;
+      },
+    ) => promptBuilder.generate(input),
+  );
+  ipcMain.handle(
+    IpcChannels.CURSOR_SEND_PROMPT,
+    (_e, prompt: string, folderPath?: string) => cursor.sendPromptToCursor(prompt, folderPath),
+  );
+
+  // --- Project Memory ---
+  ipcMain.handle(IpcChannels.MEMORY_GET, (_e, projectPath: string) => {
+    if (!projectPath) return null;
+    return (
+      projectMemory.getByProjectPath(projectPath) ||
+      projectMemory.seedPokopokoIfNeeded(projectPath)
+    );
+  });
+  ipcMain.handle(
+    IpcChannels.MEMORY_SAVE,
+    (_e, projectPath: string, partial: Record<string, string>) =>
+      projectMemory.upsert(projectPath, partial),
   );
 
   // --- Projects ---
@@ -126,11 +202,18 @@ export function registerIpcHandlers(services: AppServices, getWindow: GetWindow)
   ipcMain.handle(IpcChannels.GIT_STATUS, (_e, cwd: string) => git.status(cwd));
   ipcMain.handle(IpcChannels.GIT_CHECK, () => git.checkConnection());
   ipcMain.handle(IpcChannels.TOOLS_CHECK_CONNECTIONS, async () => {
-    const [cursorStatus, gitStatus] = await Promise.all([
+    const [cursorStatus, gitStatus, blenderStatus, unityStatus] = await Promise.all([
       cursor.checkConnection(),
       git.checkConnection(),
+      blender.probeConnection(),
+      unity.probeConnection(),
     ]);
-    return { cursor: cursorStatus, git: gitStatus };
+    return {
+      cursor: cursorStatus,
+      git: gitStatus,
+      blender: blenderStatus,
+      unity: unityStatus,
+    };
   });
   ipcMain.handle(IpcChannels.GIT_COMMIT, (_e, cwd: string, message: string, files?: string[]) =>
     git.commit(cwd, message, files),
@@ -209,23 +292,84 @@ export function registerIpcHandlers(services: AppServices, getWindow: GetWindow)
 
   // --- Creator Hub ---
   ipcMain.handle(IpcChannels.HUB_SCAN, (_e, projectRoot: string) => hub.scan(projectRoot));
-  ipcMain.handle(IpcChannels.HUB_OPEN_TOOL, (_e, projectRoot: string, htmlPath: string) =>
-    hub.resolveToolUrl(projectRoot, htmlPath),
-  );
+  ipcMain.handle(IpcChannels.HUB_OPEN_TOOL, async (_e, projectRoot: string, htmlPath: string) => {
+    // 旧 UI 互換: HTTP ポートは使わず、専用 WebContentsView で開く
+    const win = getWindow();
+    if (win && !win.isDestroyed()) {
+      const [cw, ch] = win.getContentSize();
+      const bounds = {
+        x: Math.round(cw * 0.18),
+        y: 96,
+        width: Math.max(320, Math.round(cw * 0.82) - 16),
+        height: Math.max(240, ch - 112),
+      };
+      const shown = await toolWorkspace.show(win, projectRoot, htmlPath, bounds);
+      if (shown.success) {
+        return {
+          success: true,
+          url: '',
+          message: shown.message,
+        };
+      }
+      return { success: false, url: '', message: shown.message };
+    }
+    return hub.resolveToolUrl(projectRoot, htmlPath);
+  });
   ipcMain.handle(IpcChannels.HUB_OPEN_HUB, (_e, projectRoot: string) => hub.openHub(projectRoot));
-  ipcMain.handle(IpcChannels.HUB_SERVER_STATUS, () => devServer.getStatus());
-  ipcMain.handle(IpcChannels.HUB_SERVER_START, (_e, projectRoot: string, port?: number) =>
+  ipcMain.handle(
+    IpcChannels.HUB_SHOW_TOOL_VIEW,
+    async (
+      _e,
+      payload: {
+        projectRoot: string;
+        htmlPath: string;
+        bounds: { x: number; y: number; width: number; height: number };
+      },
+    ) => {
+      const win = getWindow();
+      if (!win) {
+        return { success: false, message: 'ウィンドウがありません' };
+      }
+      return toolWorkspace.show(win, payload.projectRoot, payload.htmlPath, payload.bounds);
+    },
+  );
+  ipcMain.handle(IpcChannels.HUB_HIDE_TOOL_VIEW, () => {
+    toolWorkspace.hide(getWindow());
+    return true;
+  });
+  ipcMain.handle(
+    IpcChannels.HUB_SET_TOOL_BOUNDS,
+    (_e, bounds: { x: number; y: number; width: number; height: number }) => {
+      toolWorkspace.setBounds(bounds);
+      return true;
+    },
+  );
+  ipcMain.handle(IpcChannels.HUB_RELOAD_TOOL_VIEW, () => {
+    toolWorkspace.reload();
+    return true;
+  });
+  ipcMain.handle(IpcChannels.HUB_SERVER_STATUS, () => ({
+    running: false,
+    port: 0,
+    root: null,
+    baseUrl: null,
+    mode: 'idle' as const,
+  }));
+  ipcMain.handle(IpcChannels.HUB_SERVER_START, async (_e, projectRoot: string, port?: number) =>
     hub.ensureServer(projectRoot, port),
   );
-  ipcMain.handle(IpcChannels.HUB_SERVER_STOP, () => hub.stopServer());
+  ipcMain.handle(IpcChannels.HUB_SERVER_STOP, async () => {
+    toolWorkspace.hide(getWindow());
+    return hub.stopServer();
+  });
   ipcMain.handle(IpcChannels.HUB_RUN_SCRIPT, (_e, cwd: string, script: string) =>
     runner.runNpmScript(cwd, script),
   );
   ipcMain.handle(IpcChannels.PROJECT_REVEAL, async (_e, targetPath: string) => {
     await shell.showItemInFolder(targetPath);
   });
-  ipcMain.handle(IpcChannels.HUB_OPEN_EXTERNAL, async (_e, url: string) => {
-    await hub.openInExternalBrowser(url);
+  ipcMain.handle(IpcChannels.HUB_OPEN_EXTERNAL, async (_e, url: string, projectRoot?: string) => {
+    await hub.openInExternalBrowser(url, projectRoot);
   });
 
   // --- Blender AI ---
@@ -258,6 +402,68 @@ export function registerIpcHandlers(services: AppServices, getWindow: GetWindow)
     if (!t) throw new Error(`テンプレートが見つかりません: ${id}`);
     return blenderChat.send(t.phrases[0] ?? t.label);
   });
+  ipcMain.handle(
+    IpcChannels.BLENDER_GENERATE_FROM_PHOTO,
+    async (_e, options?: { mode?: 'reference' | 'relief' | 'scene'; path?: string }) => {
+      let imagePath = options?.path;
+      if (!imagePath) {
+        const win = getWindow();
+        const result = await dialog.showOpenDialog(win ?? undefined!, {
+          title: '写真を選択（3D 生成）',
+          properties: ['openFile'],
+          filters: [
+            { name: '画像', extensions: ['png', 'jpg', 'jpeg', 'webp', 'bmp', 'gif'] },
+            { name: 'すべて', extensions: ['*'] },
+          ],
+        });
+        if (result.canceled || result.filePaths.length === 0) {
+          return null;
+        }
+        imagePath = result.filePaths[0];
+      }
+      return blenderChat.generateFromPhoto(imagePath, options?.mode ?? 'scene');
+    },
+  );
+  ipcMain.handle(
+    IpcChannels.BLENDER_PREVIEW,
+    async (_e, options?: { width?: number; height?: number; mode?: 'viewport' | 'render' }) => {
+      try {
+        const result = (await blender.execute('viewport.preview', {
+          width: options?.width ?? 720,
+          height: options?.height ?? 405,
+          mode: options?.mode ?? 'viewport',
+        })) as {
+          ok?: boolean;
+          mimeType?: string;
+          data?: string;
+          width?: number;
+          height?: number;
+          mode?: string;
+          objectCount?: number;
+          camera?: string | null;
+        };
+        return {
+          ok: Boolean(result?.ok && result?.data),
+          mimeType: result?.mimeType ?? 'image/png',
+          data: result?.data ?? '',
+          width: result?.width ?? 0,
+          height: result?.height ?? 0,
+          mode: result?.mode,
+          objectCount: result?.objectCount,
+          camera: result?.camera ?? null,
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          mimeType: 'image/png',
+          data: '',
+          width: 0,
+          height: 0,
+          message: error instanceof Error ? error.message : String(error),
+        };
+      }
+    },
+  );
 
   // --- Unity AI ---
   ipcMain.handle(IpcChannels.UNITY_STATUS, () => unity.getStatus());

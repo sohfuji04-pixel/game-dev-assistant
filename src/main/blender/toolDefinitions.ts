@@ -94,6 +94,18 @@ export function buildOpenAITools(plugins?: BlenderToolPluginHost) {
       },
       path: { type: 'string', description: 'エクスポート時のパス' },
     }),
+    tool(BlenderMethods.imageImportAsPlane, '写真をテクスチャ付きプレーンとして配置', {
+      path: { type: 'string', description: '画像ファイルの絶対パス' },
+      name: { type: 'string' },
+      size: { type: 'number' },
+      standup: { type: 'boolean' },
+    }),
+    tool(BlenderMethods.imageGenerateFromPhoto, '写真から簡易3Dシーンを生成', {
+      path: { type: 'string', description: '画像ファイルの絶対パス' },
+      mode: { type: 'string', description: 'reference|relief|scene' },
+      name: { type: 'string' },
+      thickness: { type: 'number' },
+    }),
     tool(BlenderMethods.undo, 'Undo', {}),
     tool(BlenderMethods.redo, 'Redo', {}),
   ];

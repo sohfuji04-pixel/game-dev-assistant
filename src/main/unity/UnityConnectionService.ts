@@ -193,6 +193,54 @@ export class UnityConnectionService extends EventEmitter {
     return this.call(method, params);
   }
 
+  /**
+   * ダッシュボード用プローブ。
+   * 既に接続中ならその状態を返し、未接続なら短時間だけ接続を試す（成功後は切断）。
+   */
+  async probeConnection(): Promise<import('../../shared/types').ToolConnectionStatus> {
+    const checkedAt = new Date().toISOString();
+    const url = this.normalizeUrl(this.settings.get().unityWsUrl);
+    const editor = this.settings.get().unityEditorPath?.trim() ?? '';
+
+    if (this.status.connected) {
+      return {
+        ok: true,
+        tool: 'unity',
+        path: url,
+        version: this.status.unityVersion ?? undefined,
+        live: true,
+        message: `ブリッジ接続中（${this.status.projectName ?? 'Unity'} ${this.status.unityVersion ?? ''}）`,
+        checkedAt,
+      };
+    }
+
+    try {
+      await this.connect();
+      const version = this.status.unityVersion ?? undefined;
+      const project = this.status.projectName ?? undefined;
+      await this.disconnect();
+      return {
+        ok: true,
+        tool: 'unity',
+        path: url,
+        version,
+        live: false,
+        message: `ブリッジ接続可（${project ?? 'Unity'} ${version ?? ''}）`.trim(),
+        checkedAt,
+      };
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      return {
+        ok: false,
+        tool: 'unity',
+        path: editor || url,
+        live: false,
+        message: `Unity Bridge 未接続（${detail}）。Editor で Start Bridge を実行してください。`,
+        checkedAt,
+      };
+    }
+  }
+
   private rejectAllPending(reason: string): void {
     for (const [id, p] of this.pending) {
       clearTimeout(p.timer);

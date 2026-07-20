@@ -71,6 +71,9 @@ export const BlenderMethods = {
   renderSetEngine: 'render.set_engine',
   renderStill: 'render.still',
   renderAnimation: 'render.animation',
+  viewportPreview: 'viewport.preview',
+  imageImportAsPlane: 'image.import_as_plane',
+  imageGenerateFromPhoto: 'image.generate_from_photo',
 
   // Export
   exportBlend: 'export.blend',

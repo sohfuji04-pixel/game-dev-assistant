@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ダッシュボード View
  * クイックアクション + 創作ハブ導線 + 最近のプロジェクトを統合。
  */
@@ -49,37 +49,47 @@ export function DashboardView({ app }: Props) {
           </button>
         </div>
         <div className="connection-grid">
-          <div className={`connection-card${vm.cursorStatus?.ok ? ' ok' : vm.cursorStatus ? ' ng' : ''}`}>
-            <div className="connection-card-head">
-              <span
-                className={`status-dot${vm.cursorStatus?.ok ? ' on' : vm.cursorStatus ? ' off' : ''}`}
-              />
-              <strong>Cursor</strong>
-              <span className="chip">{vm.cursorStatus?.ok ? '接続可' : vm.cursorStatus ? '未接続' : '—'}</span>
-            </div>
-            <div className="meta">{vm.cursorStatus?.message ?? '未確認'}</div>
-            {vm.cursorStatus?.path && (
-              <div className="meta mono truncate" title={vm.cursorStatus.path}>
-                {vm.cursorStatus.path}
+          {(
+            [
+              { key: 'cursor', label: 'Cursor', status: vm.cursorStatus, page: 'cursor' as const },
+              { key: 'git', label: 'Git', status: vm.gitStatus, page: 'git' as const },
+              { key: 'blender', label: 'Blender', status: vm.blenderStatus, page: 'blender' as const },
+              { key: 'unity', label: 'Unity', status: vm.unityStatus, page: 'unity' as const },
+            ] as const
+          ).map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              className={`connection-card${item.status?.ok ? ' ok' : item.status ? ' ng' : ''}`}
+              onClick={() => app.setPage(item.page)}
+              title={`${item.label} 画面を開く`}
+            >
+              <div className="connection-card-head">
+                <span
+                  className={`status-dot${
+                    item.status?.live ? ' on' : item.status?.ok ? ' on' : item.status ? ' off' : ''
+                  }`}
+                />
+                <strong>{item.label}</strong>
+                <span className="chip">
+                  {item.status?.live
+                    ? '接続中'
+                    : item.status?.ok
+                      ? '利用可'
+                      : item.status
+                        ? '未接続'
+                        : '—'}
+                </span>
               </div>
-            )}
-          </div>
-          <div className={`connection-card${vm.gitStatus?.ok ? ' ok' : vm.gitStatus ? ' ng' : ''}`}>
-            <div className="connection-card-head">
-              <span
-                className={`status-dot${vm.gitStatus?.ok ? ' on' : vm.gitStatus ? ' off' : ''}`}
-              />
-              <strong>Git</strong>
-              <span className="chip">{vm.gitStatus?.ok ? '接続可' : vm.gitStatus ? '未接続' : '—'}</span>
-            </div>
-            <div className="meta">{vm.gitStatus?.message ?? '未確認'}</div>
-            {vm.gitStatus?.path && (
-              <div className="meta mono truncate" title={vm.gitStatus.path}>
-                {vm.gitStatus.path}
-                {vm.gitStatus.version ? ` · v${vm.gitStatus.version}` : ''}
-              </div>
-            )}
-          </div>
+              <div className="meta">{item.status?.message ?? '未確認'}</div>
+              {item.status?.path && (
+                <div className="meta mono truncate" title={item.status.path}>
+                  {item.status.path}
+                  {item.status.version ? ` · ${item.status.version}` : ''}
+                </div>
+              )}
+            </button>
+          ))}
         </div>
       </section>
 
@@ -96,6 +106,10 @@ export function DashboardView({ app }: Props) {
         >
           <span className="qa-label">Creator Hub</span>
           <strong>創作ツール</strong>
+        </button>
+        <button type="button" className="qa-card" onClick={() => app.setPage('chatgpt')}>
+          <span className="qa-label">AI</span>
+          <strong>ChatGPT</strong>
         </button>
         <button type="button" className="qa-card" onClick={() => app.setPage('blender')}>
           <span className="qa-label">3D</span>

@@ -171,22 +171,27 @@ export function SettingsView({ app }: Props) {
             Blender 切断時に自動再接続
           </label>
           <div className="field">
-            <label>OpenAI API Key（任意）</label>
+            <label>OpenAI API Key（暗号化保存）</label>
             <input
               type="password"
-              value={vm.draft.openaiApiKey}
-              onChange={(e) => vm.updateField('openaiApiKey', e.target.value)}
-              placeholder="未設定でもテンプレートは利用可"
+              value={vm.openaiKeyDraft}
+              onChange={(e) => vm.setOpenAiKeyDraft(e.target.value)}
+              placeholder={vm.openaiKeyMask ? `保存済み: ${vm.openaiKeyMask}` : 'sk-...（未設定）'}
               autoComplete="off"
             />
+            <p className="meta">入力して保存すると userData に暗号化されます。ソースには書きません。</p>
           </div>
           <div className="field">
             <label>OpenAI Model</label>
-            <input
+            <select
               value={vm.draft.openaiModel}
               onChange={(e) => vm.updateField('openaiModel', e.target.value)}
-              placeholder="gpt-4o-mini"
-            />
+            >
+              <option value="gpt-5.5">GPT-5.5</option>
+              <option value="gpt-5">GPT-5</option>
+              <option value="gpt-4.1">GPT-4.1</option>
+              <option value="gpt-4o-mini">gpt-4o-mini（互換）</option>
+            </select>
           </div>
           <h3 style={{ marginTop: '0.5rem' }}>Unity AI</h3>
           <div className="field">

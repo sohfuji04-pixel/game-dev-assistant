@@ -1,32 +1,23 @@
 ﻿/**
  * 創作ツールハブ ViewModel
- * ツールはアプリ内 iframe で完結表示する。
+ * WebContentsView 専用画面で開く（ポート不要・再起動不要）
  */
 import { ApiClient } from '../services/ApiClient';
 import { ViewModelBase } from './ViewModelBase';
 import type { AppViewModel } from './AppViewModel';
-import type { CreatorTool, DevServerStatus, HubScanResult } from '@shared/types';
+import type { CreatorTool, HubScanResult } from '@shared/types';
 
 export class CreatorHubViewModel extends ViewModelBase {
   scan: HubScanResult | null = null;
-  server: DevServerStatus = {
-    running: false,
-    port: 8780,
-    root: null,
-    baseUrl: null,
-    mode: 'idle',
-  };
   message = '';
   loading = false;
   runningScript: string | null = null;
   lastLog = '';
 
-  /** アプリ内で開いているツール */
   activeTool: CreatorTool | null = null;
   activeTitle = '';
-  activeUrl: string | null = null;
-  iframeKey = 0;
-  iframeLoading = false;
+  activeHtmlPath = '';
+  toolLoading = false;
 
   constructor(private readonly app: AppViewModel) {
     super();
@@ -37,14 +28,13 @@ export class CreatorHubViewModel extends ViewModelBase {
   }
 
   get isToolOpen(): boolean {
-    return Boolean(this.activeUrl);
+    return Boolean(this.activeHtmlPath);
   }
 
   async load(): Promise<void> {
     this.loading = true;
     this.notify();
     try {
-      this.server = await ApiClient.hubServerStatus();
       const root = this.projectPath;
       if (!root) {
         this.scan = null;
@@ -66,87 +56,102 @@ export class CreatorHubViewModel extends ViewModelBase {
     }
   }
 
-  async startServer(): Promise<void> {
-    const root = this.projectPath;
-    if (!root) return;
-    this.loading = true;
-    this.notify();
-    try {
-      this.server = await ApiClient.hubServerStart(root);
-      this.message = `サーバ起動: ${this.server.baseUrl}`;
-    } catch (error) {
-      this.message = error instanceof Error ? error.message : String(error);
-    } finally {
-      this.loading = false;
-      this.notify();
-    }
-  }
-
-  async stopServer(): Promise<void> {
-    this.closeTool();
-    this.server = await ApiClient.hubServerStop();
-    this.message = 'サーバを停止しました';
-    this.notify();
-  }
-
-  /** アプリ内でツールを開く */
+  /** UI を先に開き、レイアウト後に mountToolView で実体を載せる */
   async openTool(htmlPath: string, title?: string, tool?: CreatorTool): Promise<void> {
     const root = this.projectPath;
     if (!root) return;
-    this.iframeLoading = true;
-    this.loading = true;
-    this.message = 'ツールを読み込み中…';
+
+    this.activeTool = tool ?? null;
+    this.activeTitle = title ?? tool?.title ?? htmlPath;
+    this.activeHtmlPath = htmlPath;
+    this.toolLoading = true;
+    this.message = '';
+    this.app.setHubActiveToolId(tool?.id ?? null);
+    this.notify();
+  }
+
+  async mountToolView(bounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }): Promise<void> {
+    const root = this.projectPath;
+    if (!root || !this.activeHtmlPath) return;
+    this.toolLoading = true;
     this.notify();
     try {
-      const result = await ApiClient.hubOpenTool(root, htmlPath);
-      this.server = await ApiClient.hubServerStatus();
-      if (!result.success || !result.url) {
+      const result = await ApiClient.hubShowToolView({
+        projectRoot: root,
+        htmlPath: this.activeHtmlPath,
+        bounds,
+      });
+      if (!result.success) {
         this.message = result.message || 'ツールを開けませんでした';
-        return;
+      } else {
+        this.message = '';
       }
-      this.activeTool = tool ?? null;
-      this.activeTitle = title ?? tool?.title ?? htmlPath;
-      this.activeUrl = result.url;
-      this.iframeKey += 1;
-      this.message = '';
     } catch (error) {
       this.message = error instanceof Error ? error.message : String(error);
     } finally {
-      this.loading = false;
-      this.iframeLoading = false;
+      this.toolLoading = false;
       this.notify();
     }
   }
 
-  closeTool(): void {
-    this.activeTool = null;
-    this.activeTitle = '';
-    this.activeUrl = null;
-    this.iframeLoading = false;
-    this.notify();
+  async updateToolBounds(bounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }): Promise<void> {
+    if (!this.isToolOpen) return;
+    await ApiClient.hubSetToolBounds(bounds);
   }
 
-  refreshTool(): void {
-    if (!this.activeUrl) return;
-    this.iframeKey += 1;
-    this.iframeLoading = true;
-    this.notify();
-  }
-
-  onIframeLoaded(href?: string): void {
-    this.iframeLoading = false;
-    // ツール内の「← ハブ」リンクで creator-hub に戻ったらアプリ側ハブへ
-    if (href && /creator-hub\.html/i.test(href)) {
-      this.closeTool();
+  async openToolById(toolId: string): Promise<void> {
+    const tool = this.scan?.tools.find((t) => t.id === toolId);
+    if (!tool) {
+      this.message = `ツールが見つかりません: ${toolId}（プロジェクトを開いているか確認してください）`;
+      this.app.setHubActiveToolId(null);
+      this.notify();
       return;
     }
+    await this.openTool(tool.htmlPath, tool.title, tool);
+  }
+
+  async closeTool(): Promise<void> {
+    try {
+      await ApiClient.hubHideToolView();
+    } catch {
+      /* ignore */
+    }
+    this.activeTool = null;
+    this.activeTitle = '';
+    this.activeHtmlPath = '';
+    this.toolLoading = false;
+    this.app.setHubActiveToolId(null);
     this.notify();
+  }
+
+  async refreshTool(): Promise<void> {
+    if (!this.isToolOpen) return;
+    this.toolLoading = true;
+    this.notify();
+    try {
+      await ApiClient.hubReloadToolView();
+    } finally {
+      this.toolLoading = false;
+      this.notify();
+    }
   }
 
   async openExternal(): Promise<void> {
-    if (!this.activeUrl) return;
-    await ApiClient.hubOpenExternal(this.activeUrl);
-    this.message = '外部ブラウザでも開きました';
+    const root = this.projectPath;
+    if (!root || !this.activeHtmlPath) return;
+    const fakeUrl = `gda-project://workspace/${this.activeHtmlPath.replace(/^\/+/, '')}`;
+    await ApiClient.hubOpenExternal(fakeUrl, root);
+    this.message = '既定アプリで開きました';
     this.notify();
   }
 

@@ -434,6 +434,24 @@ textarea {
   opacity: 0.7;
 }
 
+.nav-btn-tool {
+  font-size: 0.9em;
+  opacity: 0.95;
+  padding-left: 1rem;
+}
+
+.nav-btn-tool span::before {
+  content: '';
+  display: inline-block;
+  width: 0.35rem;
+  height: 0.35rem;
+  margin-right: 0.45rem;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.55;
+  vertical-align: middle;
+}
+
 .sidebar-project {
   margin: 0.5rem;
   padding: 0.65rem 0.7rem;
@@ -534,6 +552,13 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+
+.connection-card:hover {
+  border-color: var(--accent);
 }
 
 .connection-card.ok {
@@ -884,6 +909,12 @@ code {
   background: #fff;
 }
 
+.tool-frame-host {
+  /* WebContentsView がこの領域に重なる（本体はメインプロセス側） */
+  background: #111820;
+  position: relative;
+}
+
 /* hub ページ内でツール一覧時も content が伸びるよう */
 .content > .tool-workspace {
   overflow: hidden;
@@ -907,6 +938,47 @@ code {
   flex-direction: column;
   min-height: 0;
   height: 100%;
+}
+
+.blender-preview-panel {
+  margin-bottom: 0.85rem;
+}
+
+.blender-preview-frame {
+  position: relative;
+  margin-top: 0.55rem;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: #0a0e12;
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.blender-preview-frame img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 420px;
+  object-fit: contain;
+  background: #0a0e12;
+}
+
+.blender-preview-frame.empty {
+  min-height: 180px;
+}
+
+.blender-preview-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 14, 18, 0.55);
+  color: #fff;
+  font-size: 0.9rem;
 }
 
 .blender-templates,
@@ -939,6 +1011,19 @@ code {
 
 .template-btn:hover:not(:disabled) {
   border-color: var(--accent);
+}
+
+.photo-gen-block {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.photo-gen-block select {
+  width: 100%;
 }
 
 .chat-log {
@@ -1009,3 +1094,133 @@ code {
     grid-template-columns: 1fr;
   }
 }
+
+/* --- AI 統合 UI --- */
+.glass-panel {
+  background: color-mix(in srgb, var(--bg-panel) 82%, transparent);
+  backdrop-filter: blur(10px);
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.ai-mode-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.chip-btn {
+  border-radius: 999px;
+  padding: 0.28rem 0.7rem;
+  font-size: 0.8rem;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.chip-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.chatgpt-layout {
+  display: grid;
+  grid-template-columns: minmax(200px, 260px) 1fr;
+  gap: 0.85rem;
+  min-height: 0;
+  flex: 1;
+}
+
+.chatgpt-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: calc(100vh - 220px);
+}
+
+.chat-search {
+  width: 100%;
+}
+
+.chat-thread-list {
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1;
+}
+
+.thread-item {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.thread-item.active {
+  border-color: var(--accent);
+}
+
+.chatgpt-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 480px;
+  max-height: calc(100vh - 220px);
+}
+
+.chatgpt-log {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin: 0.5rem 0;
+}
+
+.chatgpt-input {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.chatgpt-input textarea {
+  flex: 1;
+  resize: vertical;
+  min-height: 72px;
+}
+
+.md-body {
+  white-space: normal;
+}
+
+.md-body .md-code {
+  display: block;
+  margin: 0.5rem 0;
+  padding: 0.65rem;
+  border-radius: 8px;
+  background: #0b1016;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  white-space: pre;
+}
+
+.md-inline {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  padding: 0.05rem 0.25rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--bg-elevated) 70%, #000);
+}
+
+@media (max-width: 960px) {
+  .chatgpt-layout {
+    grid-template-columns: 1fr;
+  }
+}
+

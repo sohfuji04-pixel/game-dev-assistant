@@ -96,9 +96,44 @@ export class DatabaseService {
         created_at TEXT NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS chat_threads (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        mode TEXT NOT NULL DEFAULT 'general',
+        project_path TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id TEXT PRIMARY KEY,
+        thread_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'done'
+      );
+
+      CREATE TABLE IF NOT EXISTS project_memory (
+        id TEXT PRIMARY KEY,
+        project_path TEXT NOT NULL UNIQUE,
+        title TEXT NOT NULL DEFAULT '',
+        genre TEXT NOT NULL DEFAULT '',
+        world_setting TEXT NOT NULL DEFAULT '',
+        characters TEXT NOT NULL DEFAULT '',
+        rules TEXT NOT NULL DEFAULT '',
+        engines TEXT NOT NULL DEFAULT '',
+        languages TEXT NOT NULL DEFAULT '',
+        folder_notes TEXT NOT NULL DEFAULT '',
+        extra TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL
+      );
+
       CREATE INDEX IF NOT EXISTS idx_logs_created ON logs(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_prompt_history_used ON prompt_history(used_at DESC);
       CREATE INDEX IF NOT EXISTS idx_recent_opened ON recent_projects(last_opened_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_chat_threads_updated ON chat_threads(updated_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id, created_at);
     `);
 
     this.seedChangelogIfEmpty();

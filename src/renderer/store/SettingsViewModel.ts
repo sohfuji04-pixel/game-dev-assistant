@@ -21,6 +21,9 @@ export class SettingsViewModel extends ViewModelBase {
   checkingConnections = false;
   message = '';
   saving = false;
+  /** API キー入力欄（保存時のみ SecretStore へ送る） */
+  openaiKeyDraft = '';
+  openaiKeyMask = '';
 
   constructor(private readonly app: AppViewModel) {
     super();
@@ -28,6 +31,8 @@ export class SettingsViewModel extends ViewModelBase {
 
   async load(): Promise<void> {
     this.draft = await ApiClient.getSettings();
+    this.openaiKeyMask = await ApiClient.getOpenAiKeyMask();
+    this.openaiKeyDraft = '';
     this.plugins = await ApiClient.listPlugins();
     this.updater = await ApiClient.getUpdaterStatus();
     this.notify();
@@ -37,6 +42,11 @@ export class SettingsViewModel extends ViewModelBase {
   updateField<K extends keyof AppSettings>(key: K, value: AppSettings[K]): void {
     if (!this.draft) return;
     this.draft = { ...this.draft, [key]: value };
+    this.notify();
+  }
+
+  setOpenAiKeyDraft(value: string): void {
+    this.openaiKeyDraft = value;
     this.notify();
   }
 
@@ -56,9 +66,17 @@ export class SettingsViewModel extends ViewModelBase {
     this.saving = true;
     this.notify();
     try {
-      this.draft = await ApiClient.setSettings(this.draft);
+      const { openaiApiKey: _drop, ...rest } = this.draft;
+      this.draft = await ApiClient.setSettings(rest);
+      if (this.openaiKeyDraft.trim()) {
+        const res = await ApiClient.setOpenAiKey(this.openaiKeyDraft.trim());
+        this.openaiKeyMask = res.mask;
+        this.openaiKeyDraft = '';
+      } else {
+        this.openaiKeyMask = await ApiClient.getOpenAiKeyMask();
+      }
       await this.app.refreshSettings();
-      this.message = '設定を保存しました';
+      this.message = '設定を保存しました（APIキーは暗号化保存）';
       await this.checkConnections();
     } finally {
       this.saving = false;

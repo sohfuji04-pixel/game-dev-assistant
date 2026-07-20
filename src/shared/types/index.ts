@@ -14,6 +14,7 @@ export type {
   BlenderChatMessage,
   BlenderToolCall,
   BlenderTemplateInfo,
+  BlenderPreviewResult,
 } from './blender';
 
 export type {
@@ -21,6 +22,16 @@ export type {
   UnityChatMessage,
   UnityQuickCommand,
 } from './unity';
+
+export type {
+  AiChatMode,
+  ChatThread,
+  ChatMessage,
+  ChatStreamEvent,
+} from './chat';
+
+export type { ProjectMemory } from './projectMemory';
+export { EMPTY_PROJECT_MEMORY } from './projectMemory';
 
 /** 最近開いたプロジェクト */
 export interface RecentProject {
@@ -131,14 +142,16 @@ export interface BuildResult {
   log: string;
 }
 
-/** Git / Cursor などの外部ツール接続状態 */
+/** Git / Cursor / Blender / Unity などの外部ツール接続状態 */
 export interface ToolConnectionStatus {
   ok: boolean;
-  tool: 'cursor' | 'git';
-  /** 解決済みパス（またはコマンド名） */
+  tool: 'cursor' | 'git' | 'blender' | 'unity';
+  /** 解決済みパス・URL・コマンド名 */
   path: string;
   /** 取得できた場合のバージョン文字列 */
   version?: string;
+  /** ライブ接続（ブリッジ）が張れているか */
+  live?: boolean;
   message: string;
   checkedAt: string;
 }
@@ -147,6 +160,8 @@ export interface ToolConnectionStatus {
 export interface ToolsConnectionSnapshot {
   cursor: ToolConnectionStatus;
   git: ToolConnectionStatus;
+  blender: ToolConnectionStatus;
+  unity: ToolConnectionStatus;
 }
 
 /** プラグイン定義 */

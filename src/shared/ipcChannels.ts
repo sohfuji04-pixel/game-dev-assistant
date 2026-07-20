@@ -11,6 +11,27 @@ export const IpcChannels = {
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
   SETTINGS_SELECT_PATH: 'settings:select-path',
+  SETTINGS_SET_OPENAI_KEY: 'settings:set-openai-key',
+  SETTINGS_GET_OPENAI_KEY_MASK: 'settings:get-openai-key-mask',
+
+  // ChatGPT
+  CHAT_THREADS: 'chat:threads',
+  CHAT_MESSAGES: 'chat:messages',
+  CHAT_CREATE: 'chat:create',
+  CHAT_DELETE: 'chat:delete',
+  CHAT_SET_MODE: 'chat:set-mode',
+  CHAT_SEND: 'chat:send',
+  CHAT_STOP: 'chat:stop',
+  CHAT_REGENERATE: 'chat:regenerate',
+  CHAT_STREAM: 'chat:stream',
+
+  // Prompt Builder
+  PROMPT_BUILD: 'prompt:build',
+  CURSOR_SEND_PROMPT: 'cursor:send-prompt',
+
+  // Project Memory
+  MEMORY_GET: 'memory:get',
+  MEMORY_SAVE: 'memory:save',
 
   // プロジェクト
   PROJECT_OPEN: 'project:open',
@@ -80,6 +101,10 @@ export const IpcChannels = {
   HUB_SCAN: 'hub:scan',
   HUB_OPEN_TOOL: 'hub:open-tool',
   HUB_OPEN_HUB: 'hub:open-hub',
+  HUB_SHOW_TOOL_VIEW: 'hub:show-tool-view',
+  HUB_HIDE_TOOL_VIEW: 'hub:hide-tool-view',
+  HUB_SET_TOOL_BOUNDS: 'hub:set-tool-bounds',
+  HUB_RELOAD_TOOL_VIEW: 'hub:reload-tool-view',
   HUB_SERVER_STATUS: 'hub:server-status',
   HUB_SERVER_START: 'hub:server-start',
   HUB_SERVER_STOP: 'hub:server-stop',
@@ -103,6 +128,8 @@ export const IpcChannels = {
   BLENDER_CONNECTION_CHANGED: 'blender:connection-changed',
   BLENDER_TEMPLATES_LIST: 'blender:templates-list',
   BLENDER_TEMPLATES_RUN: 'blender:templates-run',
+  BLENDER_PREVIEW: 'blender:preview',
+  BLENDER_GENERATE_FROM_PHOTO: 'blender:generate-from-photo',
 
   // Unity AI
   UNITY_STATUS: 'unity:status',

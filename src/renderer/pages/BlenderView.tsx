@@ -1,5 +1,5 @@
 /**
- * Blender AI View — 接続・テンプレート・チャット
+ * Blender AI View — 接続・プレビュー・テンプレート・チャット
  */
 import { useEffect, useRef } from 'react';
 import { useViewModel } from '../store/ViewModelBase';
@@ -25,7 +25,7 @@ export function BlenderView() {
       <header className="page-header">
         <div>
           <h2>Blender AI</h2>
-          <p className="lead">日本語チャットで Blender を操作（テンプレート / OpenAI）</p>
+          <p className="lead">日本語チャットで Blender を操作（プレビュー / テンプレート / OpenAI）</p>
         </div>
         <div className={`project-pill${connected ? '' : ' muted'}`}>
           <span className={`status-dot${connected ? ' on' : ' off'}`} />
@@ -47,6 +47,13 @@ export function BlenderView() {
         <button type="button" disabled={vm.busy || !connected} onClick={() => void vm.disconnect()}>
           切断
         </button>
+        <button
+          type="button"
+          disabled={!connected || vm.previewLoading}
+          onClick={() => void vm.refreshPreview()}
+        >
+          {vm.previewLoading ? 'プレビュー更新中…' : 'プレビュー更新'}
+        </button>
         <button type="button" className="ghost" onClick={() => void vm.clearChat()}>
           履歴クリア
         </button>
@@ -57,6 +64,51 @@ export function BlenderView() {
           </span>
         )}
       </div>
+
+      <section className="panel blender-preview-panel">
+        <div className="panel-head">
+          <h3>プレビュー</h3>
+          <div className="row" style={{ gap: '0.5rem' }}>
+            <select
+              value={vm.previewMode}
+              disabled={!connected}
+              onChange={(e) => vm.setPreviewMode(e.target.value as 'viewport' | 'render')}
+            >
+              <option value="viewport">Viewport（高速）</option>
+              <option value="render">EEVEE 簡易レンダー</option>
+            </select>
+            <label className="row" style={{ gap: '0.35rem', fontSize: '0.82rem' }}>
+              <input
+                type="checkbox"
+                checked={vm.autoPreview}
+                onChange={(e) => vm.setAutoPreview(e.target.checked)}
+              />
+              操作後に自動更新
+            </label>
+          </div>
+        </div>
+        <div className={`blender-preview-frame${vm.previewUrl ? '' : ' empty'}`}>
+          {vm.previewUrl ? (
+            <img key={vm.previewUrl.slice(0, 64)} src={vm.previewUrl} alt="Blender preview" />
+          ) : (
+            <div className="empty">
+              {vm.previewCleared
+                ? '履歴をクリアしたためプレビューを消去しました。「プレビュー更新」で再表示できます'
+                : connected
+                  ? '「プレビュー更新」でシーンを表示します'
+                  : '接続後にプレビューを表示できます'}
+            </div>
+          )}
+          {vm.previewLoading && <div className="blender-preview-loading">更新中…</div>}
+        </div>
+        {vm.preview?.ok && vm.previewUrl && (
+          <div className="meta" style={{ marginTop: '0.45rem' }}>
+            {vm.preview.mode} · {vm.preview.width}×{vm.preview.height}
+            {typeof vm.preview.objectCount === 'number' ? ` · objects ${vm.preview.objectCount}` : ''}
+            {vm.preview.camera ? ` · camera ${vm.preview.camera}` : ''}
+          </div>
+        )}
+      </section>
 
       <div className="blender-layout">
         <section className="panel blender-templates">
@@ -77,6 +129,32 @@ export function BlenderView() {
               </button>
             ))}
           </div>
+
+          <div className="photo-gen-block">
+            <h3>写真から生成</h3>
+            <p className="meta">
+              写真を参照プレーンとして配置。APIキーがあれば内容解析とテンプレート追加も行います
+            </p>
+            <select
+              value={vm.photoMode}
+              disabled={vm.busy || !connected}
+              onChange={(e) =>
+                vm.setPhotoMode(e.target.value as 'reference' | 'relief' | 'scene')
+              }
+            >
+              <option value="scene">シーン（プレーン + 床 + ライト）</option>
+              <option value="relief">厚み付きプレーン</option>
+              <option value="reference">参照プレーンのみ</option>
+            </select>
+            <button
+              type="button"
+              className="primary"
+              disabled={vm.busy || !connected}
+              onClick={() => void vm.generateFromPhoto()}
+            >
+              写真を選んで生成
+            </button>
+          </div>
         </section>
 
         <section className="panel blender-chat">
@@ -84,7 +162,7 @@ export function BlenderView() {
           <div className="chat-log">
             {vm.messages.length === 0 ? (
               <div className="empty">
-                例: 「可愛い牧場少女を作成」「夕焼けに変更」「キューブを追加」
+                例: 「可愛い牧場少女を作成」「夕焼けに変更」「キューブを追加」／または左の「写真から生成」
               </div>
             ) : (
               vm.messages.map((m) => (

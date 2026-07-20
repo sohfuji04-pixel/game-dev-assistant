@@ -67,7 +67,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   blenderPort: 8775,
   autoReconnectBlender: true,
   openaiApiKey: '',
-  openaiModel: 'gpt-4o-mini',
+  openaiModel: 'gpt-4.1',
   unityWsUrl: 'ws://127.0.0.1:8765/unity/',
   unityEditorPath: '',
   unityProjectPath: '',

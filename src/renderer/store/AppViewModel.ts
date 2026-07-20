@@ -1,4 +1,4 @@
-﻿/**
+/**
  * アプリ全体の共有状態 ViewModel
  * 現在のプロジェクト・テーマ・監視イベントなどを保持する。
  */
@@ -9,11 +9,16 @@ import type { AppSettings, RecentProject, UpdaterStatus, WatcherEvent } from '@s
 export type AppPage =
   | 'dashboard'
   | 'hub'
+  | 'chatgpt'
   | 'blender'
   | 'unity'
+  | 'prompt-builder'
+  | 'image-ai'
+  | 'vision-ai'
   | 'cursor'
   | 'git'
   | 'assets'
+  | 'memory'
   | 'settings'
   | 'logs';
 
@@ -26,6 +31,12 @@ export class AppViewModel extends ViewModelBase {
   version = '';
   busyMessage = '';
   errorMessage = '';
+  /** 創作ツールハブへ遷移時に自動オープンするツール ID */
+  hubPendingToolId: string | null = null;
+  /** ハブ内で開いているツール ID（サイドバー強調用） */
+  hubActiveToolId: string | null = null;
+  /** ハブ一覧へ戻す要求（埋め込みツールを閉じる） */
+  hubCloseRequest = false;
 
   private unsubs: Array<() => void> = [];
 
@@ -60,6 +71,43 @@ export class AppViewModel extends ViewModelBase {
 
   setPage(page: AppPage): void {
     this.page = page;
+    if (page !== 'hub') {
+      this.hubPendingToolId = null;
+      this.hubActiveToolId = null;
+    }
+    this.notify();
+  }
+
+  /** 創作ツールハブの一覧（ツールを閉じた状態）へ */
+  openHubOverview(): void {
+    this.hubPendingToolId = null;
+    this.hubActiveToolId = null;
+    this.hubCloseRequest = true;
+    this.page = 'hub';
+    this.notify();
+  }
+
+  acknowledgeHubCloseRequest(): void {
+    this.hubCloseRequest = false;
+  }
+
+  /** AI/3D などから創作ツールを直接開く */
+  openCreatorTool(toolId: string): void {
+    this.hubCloseRequest = false;
+    this.hubPendingToolId = toolId;
+    this.page = 'hub';
+    this.notify();
+  }
+
+  consumeHubPendingToolId(): string | null {
+    const id = this.hubPendingToolId;
+    this.hubPendingToolId = null;
+    return id;
+  }
+
+  setHubActiveToolId(toolId: string | null): void {
+    if (this.hubActiveToolId === toolId) return;
+    this.hubActiveToolId = toolId;
     this.notify();
   }
 

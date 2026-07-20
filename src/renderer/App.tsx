@@ -1,4 +1,4 @@
-﻿/**
+/**
  * アプリケーションルート（View 層の組み立て）
  */
 import { useEffect } from 'react';
@@ -12,6 +12,10 @@ import { SettingsView } from './pages/SettingsView';
 import { LogsView } from './pages/LogsView';
 import { BlenderView } from './pages/BlenderView';
 import { UnityView } from './pages/UnityView';
+import { ChatGptView } from './pages/ChatGptView';
+import { PromptBuilderView } from './pages/PromptBuilderView';
+import { ProjectMemoryView } from './pages/ProjectMemoryView';
+import { AiPlaceholderView } from './pages/AiPlaceholderView';
 import { getAppViewModel, type AppPage } from './store/AppViewModel';
 import { useViewModel } from './store/ViewModelBase';
 import { ApiClient } from './services/ApiClient';
@@ -19,8 +23,7 @@ import { ApiClient } from './services/ApiClient';
 const PAGE_HOTKEYS: Record<string, AppPage> = {
   '1': 'dashboard',
   '2': 'hub',
-  '3': 'blender',
-  '4': 'unity',
+  '3': 'chatgpt',
   '5': 'cursor',
   '6': 'git',
   '7': 'assets',
@@ -88,7 +91,7 @@ export default function App() {
             )}
             {app.currentProject && (
               <>
-                <button type="button" onClick={() => app.setPage('hub')}>
+                <button type="button" onClick={() => app.openHubOverview()}>
                   創作ツール
                 </button>
                 <button
@@ -163,11 +166,20 @@ export default function App() {
 
         {app.page === 'dashboard' && <DashboardView app={app} />}
         {app.page === 'hub' && <CreatorHubView app={app} />}
+        {app.page === 'chatgpt' && <ChatGptView app={app} />}
         {app.page === 'blender' && <BlenderView />}
         {app.page === 'unity' && <UnityView />}
+        {app.page === 'prompt-builder' && <PromptBuilderView app={app} />}
+        {app.page === 'image-ai' && (
+          <AiPlaceholderView title="Image AI" description="画像生成（Phase 2 で実装予定）" />
+        )}
+        {app.page === 'vision-ai' && (
+          <AiPlaceholderView title="Vision AI" description="画像解析（Phase 2 で実装予定）" />
+        )}
         {app.page === 'cursor' && <CursorView />}
         {app.page === 'git' && <GitView app={app} />}
         {app.page === 'assets' && <AssetsView />}
+        {app.page === 'memory' && <ProjectMemoryView app={app} />}
         {app.page === 'settings' && <SettingsView app={app} />}
         {app.page === 'logs' && <LogsView />}
       </div>

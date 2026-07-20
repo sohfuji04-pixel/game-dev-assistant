@@ -14,12 +14,29 @@ import { WatcherService } from './services/WatcherService';
 import { UpdaterService } from './updater/UpdaterService';
 import { PluginService } from './plugins/PluginService';
 import { DevServerService } from './services/DevServerService';
+import {
+  ProjectFileProtocol,
+  registerProjectProtocolPrivileges,
+} from './services/ProjectFileProtocol';
+import { ToolWorkspaceService } from './services/ToolWorkspaceService';
+import { SecretStore, SECRET_OPENAI_KEY } from './security/SecretStore';
+import { AiProviderRouter } from './ai/AiProviderRouter';
+import { ChatGptService } from './ai/ChatGptService';
+import { PromptBuilderService } from './ai/PromptBuilderService';
+import { ProjectMemoryService } from './ai/ProjectMemoryService';
 import { BlenderConnectionService } from './blender/BlenderConnectionService';
 import { BlenderAIChatService } from './blender/BlenderAIChatService';
 import { UnityConnectionService } from './unity/UnityConnectionService';
 import { UnityAIChatService } from './unity/UnityAIChatService';
 import { registerIpcHandlers } from './ipc/registerHandlers';
 import { IpcChannels } from '../shared/ipcChannels';
+
+// カスタムプロトコルは ready 前に特権登録が必要（互換用）
+try {
+  registerProjectProtocolPrivileges();
+} catch {
+  // ホットリロード等で ready 後に再実行された場合は無視
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
@@ -30,10 +47,17 @@ export interface AppServices {
   db: DatabaseService;
   log: LogService;
   settings: SettingsService;
+  secrets: SecretStore;
+  ai: AiProviderRouter;
+  chatGpt: ChatGptService;
+  promptBuilder: PromptBuilderService;
+  projectMemory: ProjectMemoryService;
   watcher: WatcherService;
   updater: UpdaterService;
   plugins: PluginService;
   devServer: DevServerService;
+  projectFiles: ProjectFileProtocol;
+  toolWorkspace: ToolWorkspaceService;
   fileLog: FileLogService;
   blender: BlenderConnectionService;
   blenderChat: BlenderAIChatService;
@@ -110,6 +134,22 @@ async function bootstrapServices(): Promise<AppServices> {
   const settings = new SettingsService(db, userData);
   await settings.ensureDefaults();
 
+  const secrets = new SecretStore(userData, log);
+  // 平文 API キーを暗号化ストアへ移行
+  const plainKey = settings.get().openaiApiKey?.trim() ?? '';
+  if (plainKey && !secrets.has(SECRET_OPENAI_KEY)) {
+    secrets.set(SECRET_OPENAI_KEY, plainKey);
+    settings.set({ openaiApiKey: '' });
+    log.info('security', 'OpenAI APIキーを暗号化ストアへ移行しました');
+  }
+
+  const ai = new AiProviderRouter(secrets, settings);
+  const projectMemory = new ProjectMemoryService(db);
+  const chatGpt = new ChatGptService(db, ai, projectMemory, log, (event) => {
+    mainWindow?.webContents.send(IpcChannels.CHAT_STREAM, event);
+  });
+  const promptBuilder = new PromptBuilderService(ai, projectMemory, log);
+
   const watcher = new WatcherService((event) => {
     mainWindow?.webContents.send('watcher:event', event);
   });
@@ -124,11 +164,19 @@ async function bootstrapServices(): Promise<AppServices> {
   await plugins.loadAll();
 
   const devServer = new DevServerService(log);
+  const projectFiles = new ProjectFileProtocol(log);
+  try {
+    projectFiles.registerHandler();
+  } catch (err) {
+    log.warn('hub', 'プロトコル再登録をスキップ', String(err));
+  }
+  const toolWorkspace = new ToolWorkspaceService(log);
 
+  const getApiKey = () => ai.getOpenAiKey();
   const blender = new BlenderConnectionService(settings, log);
   const blenderChat = new BlenderAIChatService(settings, blender, log, (msg) => {
     mainWindow?.webContents.send(IpcChannels.BLENDER_CHAT_PROGRESS, msg);
-  });
+  }, getApiKey);
   blender.on('status', (status) => {
     mainWindow?.webContents.send(IpcChannels.BLENDER_CONNECTION_CHANGED, status);
   });
@@ -136,7 +184,7 @@ async function bootstrapServices(): Promise<AppServices> {
   const unity = new UnityConnectionService(settings, log);
   const unityChat = new UnityAIChatService(settings, unity, log, (msg) => {
     mainWindow?.webContents.send(IpcChannels.UNITY_CHAT_PROGRESS, msg);
-  });
+  }, getApiKey);
   unity.on('status', (status) => {
     mainWindow?.webContents.send(IpcChannels.UNITY_CONNECTION_CHANGED, status);
   });
@@ -148,10 +196,17 @@ async function bootstrapServices(): Promise<AppServices> {
     db,
     log,
     settings,
+    secrets,
+    ai,
+    chatGpt,
+    promptBuilder,
+    projectMemory,
     watcher,
     updater,
     plugins,
     devServer,
+    projectFiles,
+    toolWorkspace,
     fileLog,
     blender,
     blenderChat,
@@ -184,6 +239,7 @@ app.on('window-all-closed', () => {
   services?.log.info('app', 'アプリケーションを終了します');
   void services?.blender.disconnect();
   void services?.unity.disconnect();
+  services?.toolWorkspace.hide(mainWindow);
   void services?.devServer.stop();
   services?.watcher.stop();
   services?.db.close();

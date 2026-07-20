@@ -90,6 +90,30 @@ export class CursorService {
     }
   }
 
+  /**
+   * プロンプトを履歴に保存し、プロジェクトを Cursor で開く。
+   * （クリップボード連携はレンダラー側で行う）
+   */
+  async sendPromptToCursor(
+    prompt: string,
+    folderPath?: string,
+  ): Promise<{ success: boolean; message: string }> {
+    const content = prompt.trim();
+    if (!content) {
+      return { success: false, message: 'プロンプトが空です' };
+    }
+    this.addHistory({
+      title: `AI Prompt ${new Date().toLocaleString('ja-JP')}`,
+      content,
+    });
+    const launched = await this.launch(folderPath);
+    if (!launched.success) return launched;
+    return {
+      success: true,
+      message: 'Cursor を起動し、プロンプトを履歴に保存しました。クリップボードにもコピー済みなら貼り付けてください。',
+    };
+  }
+
   listPrompts(): PromptItem[] {
     return this.db
       .all<Record<string, unknown>>(

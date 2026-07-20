@@ -35,3 +35,16 @@ export interface BlenderTemplateInfo {
   description: string;
   category: string;
 }
+
+/** ビューポート / レンダープレビュー */
+export interface BlenderPreviewResult {
+  ok: boolean;
+  mimeType: string;
+  data: string;
+  width: number;
+  height: number;
+  mode?: string;
+  objectCount?: number;
+  camera?: string | null;
+  message?: string;
+}

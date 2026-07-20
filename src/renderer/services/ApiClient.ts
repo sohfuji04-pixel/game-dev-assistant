@@ -28,6 +28,7 @@ import type {
   BlenderConnectionStatus,
   BlenderChatMessage,
   BlenderTemplateInfo,
+  BlenderPreviewResult,
   UnityConnectionStatus,
   UnityChatMessage,
   UnityQuickCommand,
@@ -49,11 +50,64 @@ export const ApiClient = {
   getSettings: () => api().invoke<AppSettings>(IpcChannels.SETTINGS_GET),
   setSettings: (partial: Partial<AppSettings>) =>
     api().invoke<AppSettings>(IpcChannels.SETTINGS_SET, partial),
+  setOpenAiKey: (key: string) =>
+    api().invoke<{ ok: boolean; mask: string }>(IpcChannels.SETTINGS_SET_OPENAI_KEY, key),
+  getOpenAiKeyMask: () => api().invoke<string>(IpcChannels.SETTINGS_GET_OPENAI_KEY_MASK),
   selectPath: (options?: {
     title?: string;
     directory?: boolean;
     filters?: Array<{ name: string; extensions: string[] }>;
   }) => api().invoke<string | null>(IpcChannels.SETTINGS_SELECT_PATH, options),
+
+  chatThreads: (query?: string) =>
+    api().invoke<import('@shared/types').ChatThread[]>(IpcChannels.CHAT_THREADS, query),
+  chatMessages: (threadId: string) =>
+    api().invoke<import('@shared/types').ChatMessage[]>(IpcChannels.CHAT_MESSAGES, threadId),
+  chatCreate: (mode?: import('@shared/types').AiChatMode, projectPath?: string | null) =>
+    api().invoke<import('@shared/types').ChatThread>(IpcChannels.CHAT_CREATE, mode, projectPath),
+  chatDelete: (threadId: string) => api().invoke<boolean>(IpcChannels.CHAT_DELETE, threadId),
+  chatSetMode: (threadId: string, mode: import('@shared/types').AiChatMode) =>
+    api().invoke<boolean>(IpcChannels.CHAT_SET_MODE, threadId, mode),
+  chatSend: (threadId: string, content: string, projectPath?: string | null) =>
+    api().invoke<import('@shared/types').ChatMessage>(
+      IpcChannels.CHAT_SEND,
+      threadId,
+      content,
+      projectPath,
+    ),
+  chatStop: (threadId: string) => api().invoke<void>(IpcChannels.CHAT_STOP, threadId),
+  chatRegenerate: (threadId: string, projectPath?: string | null) =>
+    api().invoke<import('@shared/types').ChatMessage>(
+      IpcChannels.CHAT_REGENERATE,
+      threadId,
+      projectPath,
+    ),
+  onChatStream: (listener: (event: import('@shared/types').ChatStreamEvent) => void) =>
+    api().on(IpcChannels.CHAT_STREAM, (...args) =>
+      listener(args[0] as import('@shared/types').ChatStreamEvent),
+    ),
+
+  promptBuild: (input: {
+    gameContent: string;
+    workContent: string;
+    language: string;
+    projectPath?: string | null;
+  }) => api().invoke<string>(IpcChannels.PROMPT_BUILD, input),
+  cursorSendPrompt: (prompt: string, folderPath?: string) =>
+    api().invoke<{ success: boolean; message: string }>(
+      IpcChannels.CURSOR_SEND_PROMPT,
+      prompt,
+      folderPath,
+    ),
+
+  memoryGet: (projectPath: string) =>
+    api().invoke<import('@shared/types').ProjectMemory | null>(IpcChannels.MEMORY_GET, projectPath),
+  memorySave: (projectPath: string, partial: Record<string, string>) =>
+    api().invoke<import('@shared/types').ProjectMemory>(
+      IpcChannels.MEMORY_SAVE,
+      projectPath,
+      partial,
+    ),
 
   listRecentProjects: () => api().invoke<RecentProject[]>(IpcChannels.PROJECT_RECENT),
   openProject: (projectPath?: string) =>
@@ -137,6 +191,19 @@ export const ApiClient = {
       projectRoot,
       htmlPath,
     ),
+  hubShowToolView: (payload: {
+    projectRoot: string;
+    htmlPath: string;
+    bounds: { x: number; y: number; width: number; height: number };
+  }) =>
+    api().invoke<{ success: boolean; message: string; filePath?: string }>(
+      IpcChannels.HUB_SHOW_TOOL_VIEW,
+      payload,
+    ),
+  hubHideToolView: () => api().invoke<boolean>(IpcChannels.HUB_HIDE_TOOL_VIEW),
+  hubSetToolBounds: (bounds: { x: number; y: number; width: number; height: number }) =>
+    api().invoke<boolean>(IpcChannels.HUB_SET_TOOL_BOUNDS, bounds),
+  hubReloadToolView: () => api().invoke<boolean>(IpcChannels.HUB_RELOAD_TOOL_VIEW),
   hubOpenHub: (projectRoot: string) =>
     api().invoke<{ success: boolean; url: string; message: string }>(
       IpcChannels.HUB_OPEN_HUB,
@@ -148,7 +215,8 @@ export const ApiClient = {
   hubServerStop: () => api().invoke<DevServerStatus>(IpcChannels.HUB_SERVER_STOP),
   hubRunScript: (cwd: string, script: string) =>
     api().invoke<ScriptRunResult>(IpcChannels.HUB_RUN_SCRIPT, cwd, script),
-  hubOpenExternal: (url: string) => api().invoke<void>(IpcChannels.HUB_OPEN_EXTERNAL, url),
+  hubOpenExternal: (url: string, projectRoot?: string) =>
+    api().invoke<void>(IpcChannels.HUB_OPEN_EXTERNAL, url, projectRoot),
   revealInFolder: (targetPath: string) => api().invoke<void>(IpcChannels.PROJECT_REVEAL, targetPath),
 
   blenderStatus: () => api().invoke<BlenderConnectionStatus>(IpcChannels.BLENDER_STATUS),
@@ -173,6 +241,13 @@ export const ApiClient = {
     api().invoke<BlenderTemplateInfo[]>(IpcChannels.BLENDER_TEMPLATES_LIST),
   blenderTemplatesRun: (id: string) =>
     api().invoke<BlenderChatMessage>(IpcChannels.BLENDER_TEMPLATES_RUN, id),
+  blenderPreview: (options?: { width?: number; height?: number; mode?: 'viewport' | 'render' }) =>
+    api().invoke<BlenderPreviewResult>(IpcChannels.BLENDER_PREVIEW, options),
+  blenderGenerateFromPhoto: (options?: {
+    mode?: 'reference' | 'relief' | 'scene';
+    path?: string;
+  }) =>
+    api().invoke<BlenderChatMessage | null>(IpcChannels.BLENDER_GENERATE_FROM_PHOTO, options),
   onBlenderConnectionChanged: (listener: (status: BlenderConnectionStatus) => void) =>
     api().on(IpcChannels.BLENDER_CONNECTION_CHANGED, (...args) =>
       listener(args[0] as BlenderConnectionStatus),

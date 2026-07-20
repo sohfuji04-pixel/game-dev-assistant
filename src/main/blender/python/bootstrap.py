@@ -47,6 +47,8 @@ def main():
         "world_ops",
         "render_export",
         "templates",
+        "viewport",
+        "image",
         "handlers",
         "server",
     ]:

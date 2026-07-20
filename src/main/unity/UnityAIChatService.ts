@@ -25,6 +25,7 @@ export class UnityAIChatService {
     private readonly unity: UnityConnectionService,
     private readonly log: LogService,
     private readonly onProgress: (msg: UnityChatMessage) => void,
+    private readonly getApiKey: () => string = () => this.settings.get().openaiApiKey?.trim() ?? '',
   ) {}
 
   getHistory(): UnityChatMessage[] {
@@ -59,7 +60,7 @@ export class UnityAIChatService {
     try {
       const intent = this.parseIntent(content);
       if (!intent || intent.confidence < 0.55) {
-        const apiKey = this.settings.get().openaiApiKey?.trim();
+        const apiKey = this.getApiKey();
         if (apiKey) {
           assistant.content = await this.explainWithOpenAI(content, apiKey);
           assistant.status = 'done';

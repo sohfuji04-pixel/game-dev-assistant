@@ -1,37 +1,93 @@
 ﻿/**
  * 創作ツールハブ View
- * カード一覧 → アプリ内 iframe でツール編集まで完結。
+ * 専用画面はメインプロセスの WebContentsView（file://）で表示。再起動不要。
  */
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useViewModel } from '../store/ViewModelBase';
 import { CreatorHubViewModel } from '../store/CreatorHubViewModel';
+import { ApiClient } from '../services/ApiClient';
 import type { AppViewModel } from '../store/AppViewModel';
 
 interface Props {
   app: AppViewModel;
 }
 
+function readHostBounds(el: HTMLElement) {
+  const rect = el.getBoundingClientRect();
+  return {
+    x: rect.left,
+    y: rect.top,
+    width: rect.width,
+    height: rect.height,
+  };
+}
+
 export function CreatorHubView({ app }: Props) {
   const vm = useViewModel(() => new CreatorHubViewModel(app));
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     void vm.load();
   }, [vm, app.currentProject?.path]);
 
-  // プロジェクト切替時は埋め込みツールを閉じる
   useEffect(() => {
-    vm.closeTool();
+    void vm.closeTool();
   }, [vm, app.currentProject?.path]);
+
+  useEffect(() => {
+    if (!app.hubPendingToolId || !vm.scan || vm.loading) return;
+    const id = app.consumeHubPendingToolId();
+    if (id) void vm.openToolById(id);
+  }, [app.hubPendingToolId, vm, vm.scan, vm.loading]);
+
+  useEffect(() => {
+    if (!app.hubCloseRequest) return;
+    app.acknowledgeHubCloseRequest();
+    void vm.closeTool();
+  }, [app.hubCloseRequest, app, vm]);
+
+  // ページ離脱時にネイティブビューを残さない
+  useEffect(() => {
+    return () => {
+      void ApiClient.hubHideToolView().catch(() => undefined);
+    };
+  }, []);
+
+  // ツール表示中: ホスト領域に合わせて WebContentsView を載せる
+  useLayoutEffect(() => {
+    if (!vm.isToolOpen || !hostRef.current) return;
+    const el = hostRef.current;
+    const bounds = readHostBounds(el);
+    void vm.mountToolView(bounds);
+
+    const onResize = () => {
+      if (!hostRef.current) return;
+      void vm.updateToolBounds(readHostBounds(hostRef.current));
+    };
+    window.addEventListener('resize', onResize);
+    const ro = new ResizeObserver(onResize);
+    ro.observe(el);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      ro.disconnect();
+    };
+  }, [vm, vm.isToolOpen, vm.activeHtmlPath]);
+
+  // 他ページへ遷移したらネイティブビューを閉じる
+  useEffect(() => {
+    if (app.page !== 'hub' && vm.isToolOpen) {
+      void vm.closeTool();
+    }
+  }, [app.page, vm]);
 
   const tools = vm.scan?.tools ?? [];
   const pipelines = vm.scan?.pipelines ?? [];
 
-  if (vm.isToolOpen && vm.activeUrl) {
+  if (vm.isToolOpen) {
     return (
       <div className="tool-workspace">
         <header className="tool-chrome">
-          <button type="button" className="primary" onClick={() => vm.closeTool()}>
+          <button type="button" className="primary" onClick={() => void vm.closeTool()}>
             ← ハブに戻る
           </button>
           <div className="tool-chrome-title">
@@ -41,16 +97,17 @@ export function CreatorHubView({ app }: Props) {
               </span>
             )}
             <strong>{vm.activeTitle}</strong>
-            {vm.iframeLoading && <span className="meta">読み込み中…</span>}
+            <span className="chip">アプリ内画面</span>
+            {vm.toolLoading && <span className="meta">読み込み中…</span>}
           </div>
           <div className="row">
-            <button type="button" onClick={() => vm.refreshTool()} title="再読み込み">
+            <button type="button" onClick={() => void vm.refreshTool()} title="再読み込み">
               再読込
             </button>
             <button type="button" onClick={() => void vm.openInCursor()}>
               Cursor
             </button>
-            <button type="button" onClick={() => void vm.openExternal()} title="外部ブラウザ（任意）">
+            <button type="button" onClick={() => void vm.openExternal()} title="OS 既定アプリで開く">
               外部表示
             </button>
           </div>
@@ -58,22 +115,7 @@ export function CreatorHubView({ app }: Props) {
 
         {vm.message && <div className="banner tool-banner">{vm.message}</div>}
 
-        <iframe
-          key={vm.iframeKey}
-          ref={iframeRef}
-          className="tool-frame"
-          title={vm.activeTitle}
-          src={vm.activeUrl}
-          onLoad={() => {
-            let href: string | undefined;
-            try {
-              href = iframeRef.current?.contentWindow?.location.href;
-            } catch {
-              href = undefined;
-            }
-            vm.onIframeLoaded(href);
-          }}
-        />
+        <div ref={hostRef} className="tool-frame tool-frame-host" aria-label={vm.activeTitle} />
       </div>
     );
   }
@@ -85,15 +127,13 @@ export function CreatorHubView({ app }: Props) {
           <p className="hub-kicker">Creator Hub</p>
           <h2>創作ツールハブ</h2>
           <p className="lead">
-            ツールはアプリ内で開きます。ブラウザへの切り替えは不要です。
+            各ツールはアプリ内の専用画面で開きます（ポート不要・再起動不要）。
             {vm.scan?.kind === 'pokopoko' && ' （ぽこぽこプロジェクトを検出）'}
           </p>
         </div>
         <div className="hub-status">
-          <span className={`status-dot${vm.server.running ? ' on' : ''}`} />
-          {vm.server.running
-            ? `配信中 · ${vm.server.baseUrl}`
-            : 'ツール選択時に自動起動'}
+          <span className="status-dot on" />
+          ポートなし · すぐ開ける
         </div>
       </header>
 
@@ -118,11 +158,6 @@ export function CreatorHubView({ app }: Props) {
             <button type="button" onClick={() => void vm.load()} disabled={vm.loading}>
               再スキャン
             </button>
-            {vm.server.running && (
-              <button type="button" onClick={() => void vm.stopServer()}>
-                配信停止
-              </button>
-            )}
           </div>
 
           {tools.length > 0 ? (
@@ -146,7 +181,7 @@ export function CreatorHubView({ app }: Props) {
                       </span>
                     ))}
                   </div>
-                  <span className="hub-card-action">アプリ内で開く →</span>
+                  <span className="hub-card-action">専用画面で開く →</span>
                 </button>
               ))}
             </nav>

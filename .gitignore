@@ -14,3 +14,9 @@ coverage/
 *.db
 *.db-journal
 *.tsbuildinfo
+
+__pycache__/
+*.pyc
+tmp/
+main.js
+
