@@ -1,5 +1,5 @@
-/**
- * ローカル設定 DB の GitHub owner/repo を更新するワンショット
+﻿/**
+ * ローカル設定DB の GitHub owner/repo と autoUpdate を更新するワンショット
  */
 import initSqlJs from 'sql.js';
 import fs from 'node:fs';
@@ -23,9 +23,16 @@ if (row[0]?.values?.[0]?.[0]) {
 }
 settings.updateOwner = 'sohfuji04-pixel';
 settings.updateRepo = 'game-dev-assistant';
+settings.autoUpdate = false;
+settings.updateRetryCount = 1;
 db.run(
   "INSERT INTO settings(key,value) VALUES('app_settings', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
   [JSON.stringify(settings)],
 );
 fs.writeFileSync(dbPath, Buffer.from(db.export()));
-console.log('updated', settings.updateOwner, settings.updateRepo);
+console.log('updated', {
+  updateOwner: settings.updateOwner,
+  updateRepo: settings.updateRepo,
+  autoUpdate: settings.autoUpdate,
+  updateRetryCount: settings.updateRetryCount,
+});

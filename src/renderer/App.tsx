@@ -10,6 +10,8 @@ import { GitView } from './pages/GitView';
 import { AssetsView } from './pages/AssetsView';
 import { SettingsView } from './pages/SettingsView';
 import { LogsView } from './pages/LogsView';
+import { BlenderView } from './pages/BlenderView';
+import { UnityView } from './pages/UnityView';
 import { getAppViewModel, type AppPage } from './store/AppViewModel';
 import { useViewModel } from './store/ViewModelBase';
 import { ApiClient } from './services/ApiClient';
@@ -17,11 +19,13 @@ import { ApiClient } from './services/ApiClient';
 const PAGE_HOTKEYS: Record<string, AppPage> = {
   '1': 'dashboard',
   '2': 'hub',
-  '3': 'cursor',
-  '4': 'git',
-  '5': 'assets',
-  '6': 'logs',
-  '7': 'settings',
+  '3': 'blender',
+  '4': 'unity',
+  '5': 'cursor',
+  '6': 'git',
+  '7': 'assets',
+  '8': 'logs',
+  '9': 'settings',
 };
 
 export default function App() {
@@ -43,7 +47,7 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', resolved);
   }, [app.settings?.theme]);
 
-  // Ctrl+1〜7 で画面切替
+  // Ctrl+1〜9 で画面切替
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
@@ -141,11 +145,26 @@ export default function App() {
           </div>
         )}
         {app.updaterStatus.status === 'error' && app.updaterStatus.message && (
-          <div className="banner error">{app.updaterStatus.message}</div>
+          <div
+            className="banner warn"
+            onClick={() => app.clearUpdaterError()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') app.clearUpdaterError();
+            }}
+          >
+            {app.updaterStatus.message}
+            <span className="meta" style={{ marginLeft: '0.5rem' }}>
+              （クリックで閉じる / 設定で自動更新をオフにできます）
+            </span>
+          </div>
         )}
 
         {app.page === 'dashboard' && <DashboardView app={app} />}
         {app.page === 'hub' && <CreatorHubView app={app} />}
+        {app.page === 'blender' && <BlenderView />}
+        {app.page === 'unity' && <UnityView />}
         {app.page === 'cursor' && <CursorView />}
         {app.page === 'git' && <GitView app={app} />}
         {app.page === 'assets' && <AssetsView />}

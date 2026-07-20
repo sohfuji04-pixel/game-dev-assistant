@@ -18,16 +18,18 @@ const NAV_GROUPS: Array<{
   {
     label: '開発',
     items: [
-      { id: 'cursor', label: 'Cursor 連携', hint: '3' },
-      { id: 'git', label: 'Git', hint: '4' },
-      { id: 'assets', label: 'Assets', hint: '5' },
+      { id: 'blender', label: 'Blender AI', hint: '3' },
+      { id: 'unity', label: 'Unity AI', hint: '4' },
+      { id: 'cursor', label: 'Cursor 連携', hint: '5' },
+      { id: 'git', label: 'Git', hint: '6' },
+      { id: 'assets', label: 'Assets', hint: '7' },
     ],
   },
   {
     label: 'システム',
     items: [
-      { id: 'logs', label: 'ログ', hint: '6' },
-      { id: 'settings', label: '設定', hint: '7' },
+      { id: 'logs', label: 'ログ', hint: '8' },
+      { id: 'settings', label: '設定', hint: '9' },
     ],
   },
 ];

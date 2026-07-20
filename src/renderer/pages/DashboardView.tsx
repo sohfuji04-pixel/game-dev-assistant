@@ -36,6 +36,53 @@ export function DashboardView({ app }: Props) {
 
       {vm.message && <div className="banner">{vm.message}</div>}
 
+      <section className="panel connection-panel">
+        <div className="panel-head">
+          <h3>接続状態</h3>
+          <button
+            type="button"
+            className="ghost"
+            disabled={vm.checkingConnections}
+            onClick={() => void vm.checkConnections()}
+          >
+            {vm.checkingConnections ? '確認中…' : '再確認'}
+          </button>
+        </div>
+        <div className="connection-grid">
+          <div className={`connection-card${vm.cursorStatus?.ok ? ' ok' : vm.cursorStatus ? ' ng' : ''}`}>
+            <div className="connection-card-head">
+              <span
+                className={`status-dot${vm.cursorStatus?.ok ? ' on' : vm.cursorStatus ? ' off' : ''}`}
+              />
+              <strong>Cursor</strong>
+              <span className="chip">{vm.cursorStatus?.ok ? '接続可' : vm.cursorStatus ? '未接続' : '—'}</span>
+            </div>
+            <div className="meta">{vm.cursorStatus?.message ?? '未確認'}</div>
+            {vm.cursorStatus?.path && (
+              <div className="meta mono truncate" title={vm.cursorStatus.path}>
+                {vm.cursorStatus.path}
+              </div>
+            )}
+          </div>
+          <div className={`connection-card${vm.gitStatus?.ok ? ' ok' : vm.gitStatus ? ' ng' : ''}`}>
+            <div className="connection-card-head">
+              <span
+                className={`status-dot${vm.gitStatus?.ok ? ' on' : vm.gitStatus ? ' off' : ''}`}
+              />
+              <strong>Git</strong>
+              <span className="chip">{vm.gitStatus?.ok ? '接続可' : vm.gitStatus ? '未接続' : '—'}</span>
+            </div>
+            <div className="meta">{vm.gitStatus?.message ?? '未確認'}</div>
+            {vm.gitStatus?.path && (
+              <div className="meta mono truncate" title={vm.gitStatus.path}>
+                {vm.gitStatus.path}
+                {vm.gitStatus.version ? ` · v${vm.gitStatus.version}` : ''}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
       <section className="quick-actions">
         <button type="button" className="qa-card primary-tone" onClick={() => void vm.openNew()}>
           <span className="qa-label">プロジェクト</span>
@@ -49,6 +96,14 @@ export function DashboardView({ app }: Props) {
         >
           <span className="qa-label">Creator Hub</span>
           <strong>創作ツール</strong>
+        </button>
+        <button type="button" className="qa-card" onClick={() => app.setPage('blender')}>
+          <span className="qa-label">3D</span>
+          <strong>Blender AI</strong>
+        </button>
+        <button type="button" className="qa-card" onClick={() => app.setPage('unity')}>
+          <span className="qa-label">Engine</span>
+          <strong>Unity AI</strong>
         </button>
         <button type="button" className="qa-card" onClick={() => void vm.launchCursor()} disabled={vm.loading}>
           <span className="qa-label">IDE</span>

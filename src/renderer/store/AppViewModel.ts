@@ -9,6 +9,8 @@ import type { AppSettings, RecentProject, UpdaterStatus, WatcherEvent } from '@s
 export type AppPage =
   | 'dashboard'
   | 'hub'
+  | 'blender'
+  | 'unity'
   | 'cursor'
   | 'git'
   | 'assets'
@@ -28,23 +30,26 @@ export class AppViewModel extends ViewModelBase {
   private unsubs: Array<() => void> = [];
 
   async init(): Promise<void> {
-    this.settings = await ApiClient.getSettings();
-    this.version = await ApiClient.getVersion();
-    this.updaterStatus = await ApiClient.getUpdaterStatus();
+    try {
+      this.settings = await ApiClient.getSettings();
+      this.version = await ApiClient.getVersion();
+      this.updaterStatus = await ApiClient.getUpdaterStatus();
 
-    this.unsubs.push(
-      ApiClient.onWatcherEvent((event) => {
-        this.watcherEvents = [event, ...this.watcherEvents].slice(0, 50);
-        this.notify();
-      }),
-    );
-    this.unsubs.push(
-      ApiClient.onUpdaterStatus((status) => {
-        this.updaterStatus = status;
-        this.notify();
-      }),
-    );
-
+      this.unsubs.push(
+        ApiClient.onWatcherEvent((event) => {
+          this.watcherEvents = [event, ...this.watcherEvents].slice(0, 50);
+          this.notify();
+        }),
+      );
+      this.unsubs.push(
+        ApiClient.onUpdaterStatus((status) => {
+          this.updaterStatus = status;
+          this.notify();
+        }),
+      );
+    } catch (error) {
+      this.errorMessage = error instanceof Error ? error.message : String(error);
+    }
     this.notify();
   }
 
@@ -93,6 +98,14 @@ export class AppViewModel extends ViewModelBase {
   clearError(): void {
     this.errorMessage = '';
     this.notify();
+  }
+
+  /** 更新エラー表示を閉じる（再確認は設定画面から） */
+  clearUpdaterError(): void {
+    if (this.updaterStatus.status === 'error') {
+      this.updaterStatus = { status: 'idle', message: undefined };
+      this.notify();
+    }
   }
 }
 

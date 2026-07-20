@@ -9,6 +9,19 @@ export type {
 } from './settings';
 export { DEFAULT_SETTINGS } from './settings';
 
+export type {
+  BlenderConnectionStatus,
+  BlenderChatMessage,
+  BlenderToolCall,
+  BlenderTemplateInfo,
+} from './blender';
+
+export type {
+  UnityConnectionStatus,
+  UnityChatMessage,
+  UnityQuickCommand,
+} from './unity';
+
 /** 最近開いたプロジェクト */
 export interface RecentProject {
   id: string;
@@ -116,6 +129,24 @@ export interface BuildResult {
   success: boolean;
   message: string;
   log: string;
+}
+
+/** Git / Cursor などの外部ツール接続状態 */
+export interface ToolConnectionStatus {
+  ok: boolean;
+  tool: 'cursor' | 'git';
+  /** 解決済みパス（またはコマンド名） */
+  path: string;
+  /** 取得できた場合のバージョン文字列 */
+  version?: string;
+  message: string;
+  checkedAt: string;
+}
+
+/** 接続状態の一括結果 */
+export interface ToolsConnectionSnapshot {
+  cursor: ToolConnectionStatus;
+  git: ToolConnectionStatus;
 }
 
 /** プラグイン定義 */

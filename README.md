@@ -38,6 +38,32 @@ Windows 向けゲーム開発支援デスクトップアプリ（Electron + Reac
 | ログ | SQLite + `userData/logs/` ファイル |
 | 設定 | GitHub / Channel / AutoUpdate / パス類 |
 | プラグイン | 将来拡張用ホスト |
+| Blender AI | 日本語チャットで Blender 操作（WS/JSON-RPC・テンプレート・OpenAI） |
+| Unity AI | 日本語チャットで Unity Editor 操作（Bridge・ルールベース） |
+
+---
+
+## Blender AI の使い方
+
+1. **設定** で `Blender.exe` を指定（見つからない場合は自動検出を試行）
+2. サイドバー **Blender AI**（Ctrl+3）を開く
+3. **Blender 起動** → ブリッジ接続（既定 `ws://127.0.0.1:8775` ※Unity とポート分離）
+4. テンプレートをクリック、またはチャットで指示  
+   例: `可愛い牧場少女を作成` / `夕焼けに変更` / `キューブを追加`
+5. （任意）OpenAI API Key を設定すると、より柔軟な自然言語操作が可能
+
+パッケージ時は Python ブリッジが `resources/blender-addon/` に同梱されます。
+
+---
+
+## Unity AI の使い方
+
+1. Unity プロジェクトに同梱の `unity-package` を追加  
+   （Package Manager → Add package from disk → `package.json`）
+2. メニュー **Unity AI Controller → Start Bridge**（`ws://127.0.0.1:8765/unity/`）
+3. サイドバー **Unity AI**（Ctrl+4）→ **接続**
+4. クイックコマンドまたはチャット  
+   例: `プレイヤーを追加` / `敵を10体生成` / `シーンを保存`
 
 ---
 

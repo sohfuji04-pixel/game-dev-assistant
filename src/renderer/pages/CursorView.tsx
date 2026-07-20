@@ -17,6 +17,18 @@ export function CursorView() {
       <h2>Cursor 連携</h2>
       <p className="lead">起動・フォルダオープン・Prompt 管理 / 履歴 / 検索</p>
 
+      {vm.connection && (
+        <div className={`conn-hint${vm.connection.ok ? ' ok' : ' ng'}`} style={{ marginBottom: '0.75rem' }}>
+          <span className={`status-dot${vm.connection.ok ? ' on' : ' off'}`} />
+          {vm.connection.message}
+          {vm.connection.path ? (
+            <span className="meta mono truncate" title={vm.connection.path}>
+              {vm.connection.path}
+            </span>
+          ) : null}
+        </div>
+      )}
+
       {vm.message && <div className="banner">{vm.message}</div>}
 
       <div className="row" style={{ marginBottom: '1rem' }}>
@@ -25,6 +37,9 @@ export function CursorView() {
         </button>
         <button type="button" onClick={() => void vm.openFolder()}>
           任意フォルダを開く
+        </button>
+        <button type="button" disabled={vm.checking} onClick={() => void vm.checkConnection()}>
+          {vm.checking ? '確認中…' : '接続確認'}
         </button>
         <button type="button" onClick={() => vm.startCreate()}>
           新規 Prompt

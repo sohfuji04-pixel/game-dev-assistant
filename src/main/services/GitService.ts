@@ -3,7 +3,7 @@
  * Commit / Push / Pull / Branch / Release を提供する。
  */
 import { simpleGit, type SimpleGit } from 'simple-git';
-import type { GitBranchInfo, GitStatusInfo } from '../../shared/types';
+import type { GitBranchInfo, GitStatusInfo, ToolConnectionStatus } from '../../shared/types';
 import type { LogService } from './LogService';
 import type { SettingsService } from './SettingsService';
 
@@ -16,6 +16,37 @@ export class GitService {
   private client(cwd: string): SimpleGit {
     const gitPath = this.settings.get().gitPath || 'git';
     return simpleGit({ baseDir: cwd, binary: gitPath });
+  }
+
+  /** git バイナリの接続・バージョンを確認する（cwd 不要） */
+  async checkConnection(): Promise<ToolConnectionStatus> {
+    const checkedAt = new Date().toISOString();
+    const gitPath = this.settings.get().gitPath?.trim() || 'git';
+
+    try {
+      const git = simpleGit({ binary: gitPath });
+      const raw = (await git.raw(['--version'])).trim();
+      const version = raw.replace(/^git\s+version\s+/i, '') || raw;
+      this.log.info('git', '接続確認 OK', raw);
+      return {
+        ok: true,
+        tool: 'git',
+        path: gitPath,
+        version,
+        message: `接続可能（${raw}）`,
+        checkedAt,
+      };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      this.log.error('git', '接続確認失敗', detail);
+      return {
+        ok: false,
+        tool: 'git',
+        path: gitPath,
+        message: `Git に接続できません。パス設定またはインストールを確認してください。（${detail}）`,
+        checkedAt,
+      };
+    }
   }
 
   async status(cwd: string): Promise<GitStatusInfo> {

@@ -511,6 +511,62 @@ textarea {
   box-shadow: 0 0 0 3px rgba(46, 196, 162, 0.2);
 }
 
+.status-dot.off {
+  background: #e35d6a;
+  box-shadow: 0 0 0 3px rgba(227, 93, 106, 0.2);
+}
+
+.connection-panel {
+  margin-bottom: 1rem;
+}
+
+.connection-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.75rem;
+}
+
+.connection-card {
+  padding: 0.85rem 0.95rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.connection-card.ok {
+  border-color: rgba(46, 196, 162, 0.45);
+}
+
+.connection-card.ng {
+  border-color: rgba(227, 93, 106, 0.45);
+}
+
+.connection-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.conn-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.conn-hint.ok {
+  color: var(--accent-2);
+}
+
+.conn-hint.ng {
+  color: #e35d6a;
+}
+
 .quick-actions {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
@@ -835,4 +891,121 @@ code {
 
 .content > .page.hub-page {
   overflow: auto;
+}
+
+/* --- Blender AI --- */
+.blender-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) 1fr;
+  gap: 0.85rem;
+  min-height: 0;
+  flex: 1;
+}
+
+.blender-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+
+.blender-templates,
+.blender-chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 420px;
+  max-height: calc(100vh - 220px);
+}
+
+.template-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  overflow: auto;
+  margin-top: 0.5rem;
+}
+
+.template-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  text-align: left;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+}
+
+.template-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.chat-log {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin: 0.5rem 0;
+  padding-right: 0.25rem;
+}
+
+.chat-bubble {
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.chat-bubble.user {
+  align-self: flex-end;
+  max-width: 85%;
+  background: rgba(61, 156, 240, 0.12);
+  border-color: rgba(61, 156, 240, 0.35);
+}
+
+.chat-bubble.assistant {
+  align-self: flex-start;
+  max-width: 92%;
+}
+
+.chat-role {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 0.2rem;
+}
+
+.chat-content {
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.chat-code {
+  margin-top: 0.4rem;
+  max-height: 160px;
+  overflow: auto;
+  font-size: 0.75rem;
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.chat-input-row input {
+  flex: 1;
+}
+
+.project-pill.muted {
+  opacity: 0.75;
+}
+
+@media (max-width: 960px) {
+  .blender-layout {
+    grid-template-columns: 1fr;
+  }
 }

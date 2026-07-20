@@ -5,7 +5,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import { v4 as uuidv4 } from 'uuid';
-import type { PromptHistoryItem, PromptItem } from '../../shared/types';
+import type { PromptHistoryItem, PromptItem, ToolConnectionStatus } from '../../shared/types';
 import type { DatabaseService } from './DatabaseService';
 import type { LogService } from './LogService';
 import type { SettingsService } from './SettingsService';
@@ -17,9 +17,61 @@ export class CursorService {
     private readonly log: LogService,
   ) {}
 
+  /** Cursor.exe の存在・実行可否を確認する */
+  async checkConnection(): Promise<ToolConnectionStatus> {
+    const checkedAt = new Date().toISOString();
+    const exe = this.settings.get().cursorExePath?.trim() ?? '';
+
+    if (!exe) {
+      return {
+        ok: false,
+        tool: 'cursor',
+        path: '',
+        message: 'Cursor.exe のパスが未設定です。設定画面で指定してください。',
+        checkedAt,
+      };
+    }
+
+    if (!fs.existsSync(exe)) {
+      return {
+        ok: false,
+        tool: 'cursor',
+        path: exe,
+        message: '指定パスに Cursor.exe が見つかりません。',
+        checkedAt,
+      };
+    }
+
+    try {
+      const st = fs.statSync(exe);
+      if (!st.isFile()) {
+        return {
+          ok: false,
+          tool: 'cursor',
+          path: exe,
+          message: 'パスは存在しますが実行ファイルではありません。',
+          checkedAt,
+        };
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { ok: false, tool: 'cursor', path: exe, message, checkedAt };
+    }
+
+    // Cursor.exe を spawn すると GUI が開くため、接続確認では起動しない
+    this.log.info('cursor', '接続確認 OK（ファイル確認のみ）', exe);
+    return {
+      ok: true,
+      tool: 'cursor',
+      path: exe,
+      message: '接続可能（実行ファイルを確認済み）',
+      checkedAt,
+    };
+  }
+
   /** Cursor を起動（任意でフォルダを開く） */
   async launch(folderPath?: string): Promise<{ success: boolean; message: string }> {
-    const exe = this.settings.get().cursorExePath;
+    const exe = this.settings.get().cursorExePath?.trim() ?? '';
     if (!exe || !fs.existsSync(exe)) {
       const message = 'Cursor.exe のパスが未設定、または見つかりません。設定画面で指定してください。';
       this.log.error('cursor', message);

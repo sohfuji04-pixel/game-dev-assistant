@@ -20,6 +20,7 @@ export const IpcChannels = {
   // Cursor 連携
   CURSOR_LAUNCH: 'cursor:launch',
   CURSOR_OPEN_FOLDER: 'cursor:open-folder',
+  CURSOR_CHECK: 'cursor:check',
   PROMPT_LIST: 'prompt:list',
   PROMPT_SAVE: 'prompt:save',
   PROMPT_DELETE: 'prompt:delete',
@@ -34,6 +35,7 @@ export const IpcChannels = {
 
   // Git
   GIT_STATUS: 'git:status',
+  GIT_CHECK: 'git:check',
   GIT_COMMIT: 'git:commit',
   GIT_PUSH: 'git:push',
   GIT_PULL: 'git:pull',
@@ -41,6 +43,9 @@ export const IpcChannels = {
   GIT_CHECKOUT: 'git:checkout',
   GIT_CREATE_BRANCH: 'git:create-branch',
   GIT_RELEASE: 'git:release',
+
+  // 外部ツール接続確認（Git + Cursor）
+  TOOLS_CHECK_CONNECTIONS: 'tools:check-connections',
 
   // ビルド
   BUILD_WINDOWS: 'build:windows',
@@ -81,6 +86,36 @@ export const IpcChannels = {
   HUB_RUN_SCRIPT: 'hub:run-script',
   HUB_OPEN_EXTERNAL: 'hub:open-external',
   PROJECT_REVEAL: 'project:reveal',
+
+  // Blender AI
+  BLENDER_STATUS: 'blender:status',
+  BLENDER_CONNECT: 'blender:connect',
+  BLENDER_DISCONNECT: 'blender:disconnect',
+  BLENDER_LAUNCH: 'blender:launch',
+  BLENDER_CHECK_EXE: 'blender:check-exe',
+  BLENDER_EXECUTE: 'blender:execute',
+  BLENDER_CHAT_SEND: 'blender:chat-send',
+  BLENDER_CHAT_CANCEL: 'blender:chat-cancel',
+  BLENDER_CHAT_RERUN: 'blender:chat-rerun',
+  BLENDER_CHAT_HISTORY: 'blender:chat-history',
+  BLENDER_CHAT_CLEAR: 'blender:chat-clear',
+  BLENDER_CHAT_PROGRESS: 'blender:chat-progress',
+  BLENDER_CONNECTION_CHANGED: 'blender:connection-changed',
+  BLENDER_TEMPLATES_LIST: 'blender:templates-list',
+  BLENDER_TEMPLATES_RUN: 'blender:templates-run',
+
+  // Unity AI
+  UNITY_STATUS: 'unity:status',
+  UNITY_CONNECT: 'unity:connect',
+  UNITY_DISCONNECT: 'unity:disconnect',
+  UNITY_EXECUTE: 'unity:execute',
+  UNITY_CHAT_SEND: 'unity:chat-send',
+  UNITY_CHAT_HISTORY: 'unity:chat-history',
+  UNITY_CHAT_CLEAR: 'unity:chat-clear',
+  UNITY_CHAT_PROGRESS: 'unity:chat-progress',
+  UNITY_CONNECTION_CHANGED: 'unity:connection-changed',
+  UNITY_QUICK_COMMANDS: 'unity:quick-commands',
+  UNITY_PACKAGE_PATH: 'unity:package-path',
 } as const;
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels];

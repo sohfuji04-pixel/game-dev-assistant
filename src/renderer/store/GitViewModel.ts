@@ -3,12 +3,13 @@
  */
 import { ApiClient } from '../services/ApiClient';
 import { ViewModelBase } from './ViewModelBase';
-import type { GitBranchInfo, GitStatusInfo } from '@shared/types';
+import type { GitBranchInfo, GitStatusInfo, ToolConnectionStatus } from '@shared/types';
 import type { AppViewModel } from './AppViewModel';
 
 export class GitViewModel extends ViewModelBase {
   status: GitStatusInfo | null = null;
   branches: GitBranchInfo | null = null;
+  connection: ToolConnectionStatus | null = null;
   commitMessage = '';
   newBranch = '';
   releaseVersion = '';
@@ -25,10 +26,31 @@ export class GitViewModel extends ViewModelBase {
     return cwd;
   }
 
+  async checkBinary(): Promise<void> {
+    this.loading = true;
+    this.notify();
+    try {
+      this.connection = await ApiClient.checkGitConnection();
+      this.message = this.connection.ok ? '' : this.connection.message;
+    } catch (error) {
+      this.message = error instanceof Error ? error.message : String(error);
+    } finally {
+      this.loading = false;
+      this.notify();
+    }
+  }
+
   async refresh(): Promise<void> {
     this.loading = true;
     this.notify();
     try {
+      this.connection = await ApiClient.checkGitConnection();
+      if (!this.connection.ok) {
+        this.status = null;
+        this.branches = null;
+        this.message = this.connection.message;
+        return;
+      }
       const cwd = this.requireCwd();
       this.status = await ApiClient.gitStatus(cwd);
       if (this.status.isRepo) {
@@ -36,6 +58,7 @@ export class GitViewModel extends ViewModelBase {
       } else {
         this.branches = null;
       }
+      this.message = '';
     } catch (error) {
       this.message = error instanceof Error ? error.message : String(error);
     } finally {

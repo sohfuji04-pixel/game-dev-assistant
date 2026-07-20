@@ -6,6 +6,8 @@ import { app, dialog, ipcMain, shell, type BrowserWindow } from 'electron';
 import path from 'node:path';
 import { IpcChannels } from '../../shared/ipcChannels';
 import type { AppSettings, AssetType } from '../../shared/types';
+import { GAME_TEMPLATES } from '../../shared/blender/templates';
+import { UNITY_QUICK_COMMANDS } from '../../shared/unity/unityMethods';
 import type { AppServices } from '../main';
 import { AssetService } from '../services/AssetService';
 import { BuildService } from '../services/BuildService';
@@ -18,7 +20,19 @@ import { ToolRunnerService } from '../services/ToolRunnerService';
 type GetWindow = () => BrowserWindow | null;
 
 export function registerIpcHandlers(services: AppServices, getWindow: GetWindow): void {
-  const { db, log, settings, watcher, updater, plugins, devServer } = services;
+  const {
+    db,
+    log,
+    settings,
+    watcher,
+    updater,
+    plugins,
+    devServer,
+    blender,
+    blenderChat,
+    unity,
+    unityChat,
+  } = services;
   const projects = new ProjectService(db, log, watcher);
   const cursor = new CursorService(db, settings, log);
   const git = new GitService(settings, log);
@@ -82,6 +96,7 @@ export function registerIpcHandlers(services: AppServices, getWindow: GetWindow)
 
   // --- Cursor / Prompt ---
   ipcMain.handle(IpcChannels.CURSOR_LAUNCH, (_e, folder?: string) => cursor.launch(folder));
+  ipcMain.handle(IpcChannels.CURSOR_CHECK, () => cursor.checkConnection());
   ipcMain.handle(IpcChannels.CURSOR_OPEN_FOLDER, async () => {
     const win = getWindow();
     const result = await dialog.showOpenDialog(win ?? undefined!, {
@@ -109,6 +124,14 @@ export function registerIpcHandlers(services: AppServices, getWindow: GetWindow)
 
   // --- Git ---
   ipcMain.handle(IpcChannels.GIT_STATUS, (_e, cwd: string) => git.status(cwd));
+  ipcMain.handle(IpcChannels.GIT_CHECK, () => git.checkConnection());
+  ipcMain.handle(IpcChannels.TOOLS_CHECK_CONNECTIONS, async () => {
+    const [cursorStatus, gitStatus] = await Promise.all([
+      cursor.checkConnection(),
+      git.checkConnection(),
+    ]);
+    return { cursor: cursorStatus, git: gitStatus };
+  });
   ipcMain.handle(IpcChannels.GIT_COMMIT, (_e, cwd: string, message: string, files?: string[]) =>
     git.commit(cwd, message, files),
   );
@@ -204,4 +227,58 @@ export function registerIpcHandlers(services: AppServices, getWindow: GetWindow)
   ipcMain.handle(IpcChannels.HUB_OPEN_EXTERNAL, async (_e, url: string) => {
     await hub.openInExternalBrowser(url);
   });
+
+  // --- Blender AI ---
+  ipcMain.handle(IpcChannels.BLENDER_STATUS, () => blender.getStatus());
+  ipcMain.handle(IpcChannels.BLENDER_CONNECT, () => blender.connect());
+  ipcMain.handle(IpcChannels.BLENDER_DISCONNECT, () => blender.disconnect());
+  ipcMain.handle(IpcChannels.BLENDER_LAUNCH, () => blender.launch());
+  ipcMain.handle(IpcChannels.BLENDER_CHECK_EXE, () => blender.checkExe());
+  ipcMain.handle(IpcChannels.BLENDER_EXECUTE, (_e, method: string, params?: Record<string, unknown>) =>
+    blender.execute(method, params ?? {}),
+  );
+  ipcMain.handle(IpcChannels.BLENDER_CHAT_SEND, (_e, content: string) => blenderChat.send(content));
+  ipcMain.handle(IpcChannels.BLENDER_CHAT_CANCEL, (_e, messageId: string) => blenderChat.cancel(messageId));
+  ipcMain.handle(IpcChannels.BLENDER_CHAT_RERUN, (_e, messageId: string) => blenderChat.rerun(messageId));
+  ipcMain.handle(IpcChannels.BLENDER_CHAT_HISTORY, () => blenderChat.getHistory());
+  ipcMain.handle(IpcChannels.BLENDER_CHAT_CLEAR, () => {
+    blenderChat.clearHistory();
+    return true;
+  });
+  ipcMain.handle(IpcChannels.BLENDER_TEMPLATES_LIST, () =>
+    GAME_TEMPLATES.map((t) => ({
+      id: t.id,
+      label: t.label,
+      description: t.description,
+      category: t.category,
+    })),
+  );
+  ipcMain.handle(IpcChannels.BLENDER_TEMPLATES_RUN, async (_e, id: string) => {
+    const t = GAME_TEMPLATES.find((x) => x.id === id);
+    if (!t) throw new Error(`テンプレートが見つかりません: ${id}`);
+    return blenderChat.send(t.phrases[0] ?? t.label);
+  });
+
+  // --- Unity AI ---
+  ipcMain.handle(IpcChannels.UNITY_STATUS, () => unity.getStatus());
+  ipcMain.handle(IpcChannels.UNITY_CONNECT, () => unity.connect());
+  ipcMain.handle(IpcChannels.UNITY_DISCONNECT, () => unity.disconnect());
+  ipcMain.handle(IpcChannels.UNITY_EXECUTE, (_e, method: string, params?: Record<string, unknown>) =>
+    unity.execute(method, params ?? {}),
+  );
+  ipcMain.handle(IpcChannels.UNITY_CHAT_SEND, (_e, content: string) => unityChat.send(content));
+  ipcMain.handle(IpcChannels.UNITY_CHAT_HISTORY, () => unityChat.getHistory());
+  ipcMain.handle(IpcChannels.UNITY_CHAT_CLEAR, () => {
+    unityChat.clearHistory();
+    return true;
+  });
+  ipcMain.handle(IpcChannels.UNITY_QUICK_COMMANDS, () =>
+    UNITY_QUICK_COMMANDS.map((c) => ({
+      id: c.id,
+      label: c.label,
+      description: c.description,
+      phrase: c.phrase,
+    })),
+  );
+  ipcMain.handle(IpcChannels.UNITY_PACKAGE_PATH, () => unity.resolvePackagePath());
 }

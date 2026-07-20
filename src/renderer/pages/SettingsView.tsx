@@ -33,7 +33,17 @@ export function SettingsView({ app }: Props) {
       <p className="lead">一般 / GitHub 更新 / パス設定（アップデート後も userData に保持）</p>
 
       {vm.message && (
-        <div className={`banner${vm.updater.status === 'available' ? ' warn' : ''}`}>{vm.message}</div>
+        <div
+          className={`banner${
+            vm.updater.status === 'available'
+              ? ' warn'
+              : vm.updater.status === 'error'
+                ? ' error'
+                : ''
+          }`}
+        >
+          {vm.message}
+        </div>
       )}
 
       <div className="grid cols-2">
@@ -76,6 +86,12 @@ export function SettingsView({ app }: Props) {
                 参照
               </button>
             </div>
+            {vm.cursorStatus && (
+              <div className={`conn-hint${vm.cursorStatus.ok ? ' ok' : ' ng'}`}>
+                <span className={`status-dot${vm.cursorStatus.ok ? ' on' : ' off'}`} />
+                {vm.cursorStatus.message}
+              </div>
+            )}
           </div>
           <div className="field">
             <label>Git 実行パス</label>
@@ -84,7 +100,20 @@ export function SettingsView({ app }: Props) {
               onChange={(e) => vm.updateField('gitPath', e.target.value)}
               placeholder="git"
             />
+            {vm.gitStatus && (
+              <div className={`conn-hint${vm.gitStatus.ok ? ' ok' : ' ng'}`}>
+                <span className={`status-dot${vm.gitStatus.ok ? ' on' : ' off'}`} />
+                {vm.gitStatus.message}
+              </div>
+            )}
           </div>
+          <button
+            type="button"
+            disabled={vm.checkingConnections}
+            onClick={() => void vm.checkConnections()}
+          >
+            {vm.checkingConnections ? '接続確認中…' : 'Git / Cursor 接続を確認'}
+          </button>
           <div className="field">
             <label>Android SDK</label>
             <div className="row">
@@ -95,6 +124,104 @@ export function SettingsView({ app }: Props) {
               <button
                 type="button"
                 onClick={() => void vm.browse('androidSdkPath', true, 'Android SDK')}
+              >
+                参照
+              </button>
+            </div>
+          </div>
+          <h3 style={{ marginTop: '0.5rem' }}>Blender AI</h3>
+          <div className="field">
+            <label>Blender.exe</label>
+            <div className="row">
+              <input
+                value={vm.draft.blenderExePath}
+                onChange={(e) => vm.updateField('blenderExePath', e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => void vm.browse('blenderExePath', false, 'Blender.exe を選択')}
+              >
+                参照
+              </button>
+            </div>
+          </div>
+          <div className="field">
+            <label>ブリッジ Host / Port</label>
+            <div className="row">
+              <input
+                value={vm.draft.blenderHost}
+                onChange={(e) => vm.updateField('blenderHost', e.target.value)}
+                placeholder="127.0.0.1"
+              />
+              <input
+                type="number"
+                style={{ maxWidth: '7rem' }}
+                value={vm.draft.blenderPort}
+                onChange={(e) => vm.updateField('blenderPort', Number(e.target.value) || 8775)}
+              />
+            </div>
+            <div className="meta">既定 8775（Unity Bridge 8765 と衝突しないよう分離）</div>
+          </div>
+          <label className="row" style={{ gap: '0.5rem' }}>
+            <input
+              type="checkbox"
+              checked={vm.draft.autoReconnectBlender}
+              onChange={(e) => vm.updateField('autoReconnectBlender', e.target.checked)}
+            />
+            Blender 切断時に自動再接続
+          </label>
+          <div className="field">
+            <label>OpenAI API Key（任意）</label>
+            <input
+              type="password"
+              value={vm.draft.openaiApiKey}
+              onChange={(e) => vm.updateField('openaiApiKey', e.target.value)}
+              placeholder="未設定でもテンプレートは利用可"
+              autoComplete="off"
+            />
+          </div>
+          <div className="field">
+            <label>OpenAI Model</label>
+            <input
+              value={vm.draft.openaiModel}
+              onChange={(e) => vm.updateField('openaiModel', e.target.value)}
+              placeholder="gpt-4o-mini"
+            />
+          </div>
+          <h3 style={{ marginTop: '0.5rem' }}>Unity AI</h3>
+          <div className="field">
+            <label>Unity Bridge URL</label>
+            <input
+              value={vm.draft.unityWsUrl}
+              onChange={(e) => vm.updateField('unityWsUrl', e.target.value)}
+              placeholder="ws://127.0.0.1:8765/unity/"
+            />
+          </div>
+          <div className="field">
+            <label>Unity Editor.exe（任意）</label>
+            <div className="row">
+              <input
+                value={vm.draft.unityEditorPath}
+                onChange={(e) => vm.updateField('unityEditorPath', e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => void vm.browse('unityEditorPath', false, 'Unity.exe を選択')}
+              >
+                参照
+              </button>
+            </div>
+          </div>
+          <div className="field">
+            <label>Unity プロジェクトパス（任意）</label>
+            <div className="row">
+              <input
+                value={vm.draft.unityProjectPath}
+                onChange={(e) => vm.updateField('unityProjectPath', e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => void vm.browse('unityProjectPath', true, 'Unity プロジェクト')}
               >
                 参照
               </button>
@@ -154,9 +281,12 @@ export function SettingsView({ app }: Props) {
           </div>
 
           <div className="meta">
-            状態: {vm.updater.status}
+            状態: {vm.updater.status === 'not-available' ? '利用不可（問題なし）' : vm.updater.status}
             {vm.updater.version ? ` / v${vm.updater.version}` : ''}
           </div>
+          {vm.updater.message && vm.updater.status !== 'idle' && vm.updater.status !== 'error' && (
+            <div className="meta">{vm.updater.message}</div>
+          )}
           {vm.updater.status === 'available' && (
             <div className="banner warn">新しいバージョンがあります</div>
           )}

@@ -1,0 +1,1 @@
+"use strict";const r=require("electron"),i={invoke(e,...n){return r.ipcRenderer.invoke(e,...n)},on(e,n){const o=(c,...t)=>{n(...t)};return r.ipcRenderer.on(e,o),()=>{r.ipcRenderer.removeListener(e,o)}}};r.contextBridge.exposeInMainWorld("electronAPI",i);

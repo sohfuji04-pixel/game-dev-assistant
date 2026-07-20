@@ -30,6 +30,24 @@ export interface AppSettings {
   autoUpdate: boolean;
   /** 更新失敗時の自動再試行回数 */
   updateRetryCount: number;
+  /** Blender.exe のフルパス */
+  blenderExePath: string;
+  /** Blender ブリッジホスト */
+  blenderHost: string;
+  /** Blender ブリッジポート */
+  blenderPort: number;
+  /** Blender 切断時の自動再接続 */
+  autoReconnectBlender: boolean;
+  /** OpenAI API キー（Blender AI 用・任意） */
+  openaiApiKey: string;
+  /** OpenAI モデル名 */
+  openaiModel: string;
+  /** Unity Editor ブリッジ URL（例: ws://127.0.0.1:8765/unity/） */
+  unityWsUrl: string;
+  /** Unity Editor.exe パス（任意・案内用） */
+  unityEditorPath: string;
+  /** 既定の Unity プロジェクトパス */
+  unityProjectPath: string;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -42,6 +60,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
   updateOwner: 'sohfuji04-pixel',
   updateRepo: 'game-dev-assistant',
   updateChannel: 'latest',
-  autoUpdate: true,
-  updateRetryCount: 3,
+  autoUpdate: false,
+  updateRetryCount: 1,
+  blenderExePath: '',
+  blenderHost: '127.0.0.1',
+  blenderPort: 8775,
+  autoReconnectBlender: true,
+  openaiApiKey: '',
+  openaiModel: 'gpt-4o-mini',
+  unityWsUrl: 'ws://127.0.0.1:8765/unity/',
+  unityEditorPath: '',
+  unityProjectPath: '',
 };

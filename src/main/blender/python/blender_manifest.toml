@@ -1,0 +1,4 @@
+{
+  "name": "blender-ai-bridge",
+  "description": "Place this folder into Blender addons directory, then enable 'Blender AI Assistant Bridge'."
+}

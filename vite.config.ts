@@ -27,7 +27,7 @@ export default defineConfig({
           build: {
             outDir: 'dist-electron',
             rollupOptions: {
-              external: ['sql.js', 'electron', 'electron-updater'],
+              external: ['sql.js', 'electron', 'electron-updater', 'ws', 'openai'],
             },
           },
           resolve: {
@@ -43,6 +43,14 @@ export default defineConfig({
         vite: {
           build: {
             outDir: 'dist-electron',
+            rollupOptions: {
+              // パッケージ後の Electron では CJS preload が最も安定
+              output: {
+                format: 'cjs',
+                entryFileNames: '[name].cjs',
+                inlineDynamicImports: true,
+              },
+            },
           },
         },
       },

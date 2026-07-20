@@ -21,13 +21,23 @@ import type {
   PromptItem,
   RecentProject,
   ScriptRunResult,
+  ToolConnectionStatus,
+  ToolsConnectionSnapshot,
   UpdaterStatus,
   WatcherEvent,
+  BlenderConnectionStatus,
+  BlenderChatMessage,
+  BlenderTemplateInfo,
+  UnityConnectionStatus,
+  UnityChatMessage,
+  UnityQuickCommand,
 } from '@shared/types';
 
 function api() {
   if (!window.electronAPI) {
-    throw new Error('electronAPI が利用できません。Electron 上で実行してください。');
+    throw new Error(
+      'electronAPI が利用できません。デスクトップのショートカット、または release/win-unpacked の exe から起動してください（ブラウザでは動きません）。',
+    );
   }
   return window.electronAPI;
 }
@@ -55,6 +65,11 @@ export const ApiClient = {
     api().invoke<{ success: boolean; message: string }>(IpcChannels.CURSOR_LAUNCH, folder),
   openFolderInCursor: () =>
     api().invoke<{ success: boolean; message: string }>(IpcChannels.CURSOR_OPEN_FOLDER),
+  checkCursorConnection: () =>
+    api().invoke<ToolConnectionStatus>(IpcChannels.CURSOR_CHECK),
+  checkGitConnection: () => api().invoke<ToolConnectionStatus>(IpcChannels.GIT_CHECK),
+  checkToolsConnections: () =>
+    api().invoke<ToolsConnectionSnapshot>(IpcChannels.TOOLS_CHECK_CONNECTIONS),
   listPrompts: () => api().invoke<PromptItem[]>(IpcChannels.PROMPT_LIST),
   savePrompt: (input: { id?: string; title: string; content: string; tags?: string[] }) =>
     api().invoke<PromptItem>(IpcChannels.PROMPT_SAVE, input),
@@ -135,6 +150,58 @@ export const ApiClient = {
     api().invoke<ScriptRunResult>(IpcChannels.HUB_RUN_SCRIPT, cwd, script),
   hubOpenExternal: (url: string) => api().invoke<void>(IpcChannels.HUB_OPEN_EXTERNAL, url),
   revealInFolder: (targetPath: string) => api().invoke<void>(IpcChannels.PROJECT_REVEAL, targetPath),
+
+  blenderStatus: () => api().invoke<BlenderConnectionStatus>(IpcChannels.BLENDER_STATUS),
+  blenderConnect: () => api().invoke<BlenderConnectionStatus>(IpcChannels.BLENDER_CONNECT),
+  blenderDisconnect: () => api().invoke<void>(IpcChannels.BLENDER_DISCONNECT),
+  blenderLaunch: () =>
+    api().invoke<{ ok: boolean; message: string }>(IpcChannels.BLENDER_LAUNCH),
+  blenderCheckExe: () =>
+    api().invoke<{ ok: boolean; path: string; message: string }>(IpcChannels.BLENDER_CHECK_EXE),
+  blenderExecute: (method: string, params?: Record<string, unknown>) =>
+    api().invoke<unknown>(IpcChannels.BLENDER_EXECUTE, method, params),
+  blenderChatSend: (content: string) =>
+    api().invoke<BlenderChatMessage>(IpcChannels.BLENDER_CHAT_SEND, content),
+  blenderChatCancel: (messageId: string) =>
+    api().invoke<void>(IpcChannels.BLENDER_CHAT_CANCEL, messageId),
+  blenderChatRerun: (messageId: string) =>
+    api().invoke<BlenderChatMessage>(IpcChannels.BLENDER_CHAT_RERUN, messageId),
+  blenderChatHistory: () =>
+    api().invoke<BlenderChatMessage[]>(IpcChannels.BLENDER_CHAT_HISTORY),
+  blenderChatClear: () => api().invoke<boolean>(IpcChannels.BLENDER_CHAT_CLEAR),
+  blenderTemplatesList: () =>
+    api().invoke<BlenderTemplateInfo[]>(IpcChannels.BLENDER_TEMPLATES_LIST),
+  blenderTemplatesRun: (id: string) =>
+    api().invoke<BlenderChatMessage>(IpcChannels.BLENDER_TEMPLATES_RUN, id),
+  onBlenderConnectionChanged: (listener: (status: BlenderConnectionStatus) => void) =>
+    api().on(IpcChannels.BLENDER_CONNECTION_CHANGED, (...args) =>
+      listener(args[0] as BlenderConnectionStatus),
+    ),
+  onBlenderChatProgress: (listener: (msg: BlenderChatMessage) => void) =>
+    api().on(IpcChannels.BLENDER_CHAT_PROGRESS, (...args) =>
+      listener(args[0] as BlenderChatMessage),
+    ),
+
+  unityStatus: () => api().invoke<UnityConnectionStatus>(IpcChannels.UNITY_STATUS),
+  unityConnect: () => api().invoke<UnityConnectionStatus>(IpcChannels.UNITY_CONNECT),
+  unityDisconnect: () => api().invoke<void>(IpcChannels.UNITY_DISCONNECT),
+  unityExecute: (method: string, params?: Record<string, unknown>) =>
+    api().invoke<unknown>(IpcChannels.UNITY_EXECUTE, method, params),
+  unityChatSend: (content: string) =>
+    api().invoke<UnityChatMessage>(IpcChannels.UNITY_CHAT_SEND, content),
+  unityChatHistory: () => api().invoke<UnityChatMessage[]>(IpcChannels.UNITY_CHAT_HISTORY),
+  unityChatClear: () => api().invoke<boolean>(IpcChannels.UNITY_CHAT_CLEAR),
+  unityQuickCommands: () =>
+    api().invoke<UnityQuickCommand[]>(IpcChannels.UNITY_QUICK_COMMANDS),
+  unityPackagePath: () => api().invoke<string>(IpcChannels.UNITY_PACKAGE_PATH),
+  onUnityConnectionChanged: (listener: (status: UnityConnectionStatus) => void) =>
+    api().on(IpcChannels.UNITY_CONNECTION_CHANGED, (...args) =>
+      listener(args[0] as UnityConnectionStatus),
+    ),
+  onUnityChatProgress: (listener: (msg: UnityChatMessage) => void) =>
+    api().on(IpcChannels.UNITY_CHAT_PROGRESS, (...args) =>
+      listener(args[0] as UnityChatMessage),
+    ),
 };
 
 export type { CreatorTool };

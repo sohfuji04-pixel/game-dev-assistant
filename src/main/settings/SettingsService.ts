@@ -30,6 +30,42 @@ export class SettingsService {
       current.cursorExePath = this.detectCursorPath();
       changed = true;
     }
+    if (!current.blenderExePath) {
+      current.blenderExePath = this.detectBlenderPath();
+      changed = true;
+    }
+    if (!current.blenderHost) {
+      current.blenderHost = DEFAULT_SETTINGS.blenderHost;
+      changed = true;
+    }
+    if (!current.blenderPort) {
+      current.blenderPort = DEFAULT_SETTINGS.blenderPort;
+      changed = true;
+    }
+    if (current.openaiModel == null) {
+      current.openaiModel = DEFAULT_SETTINGS.openaiModel;
+      changed = true;
+    }
+    if (current.openaiApiKey == null) {
+      current.openaiApiKey = '';
+      changed = true;
+    }
+    if (current.autoReconnectBlender == null) {
+      current.autoReconnectBlender = true;
+      changed = true;
+    }
+    if (!current.unityWsUrl) {
+      current.unityWsUrl = DEFAULT_SETTINGS.unityWsUrl;
+      changed = true;
+    }
+    if (current.unityEditorPath == null) {
+      current.unityEditorPath = '';
+      changed = true;
+    }
+    if (current.unityProjectPath == null) {
+      current.unityProjectPath = '';
+      changed = true;
+    }
 
     // 永続ディレクトリ（アップデートで消えない userData 配下）
     fs.mkdirSync(current.dataPath, { recursive: true });
@@ -90,6 +126,18 @@ export class SettingsService {
       path.join(localAppData, 'Programs', 'cursor', 'Cursor.exe'),
       path.join(localAppData, 'cursor', 'Cursor.exe'),
       'C:\\Program Files\\Cursor\\Cursor.exe',
+    ];
+    return candidates.find((p) => fs.existsSync(p)) ?? '';
+  }
+
+  private detectBlenderPath(): string {
+    const candidates = [
+      'C:\\Program Files\\Blender Foundation\\Blender 4.4\\blender.exe',
+      'C:\\Program Files\\Blender Foundation\\Blender 4.3\\blender.exe',
+      'C:\\Program Files\\Blender Foundation\\Blender 4.2\\blender.exe',
+      'C:\\Program Files\\Blender Foundation\\Blender 4.1\\blender.exe',
+      'C:\\Program Files\\Blender Foundation\\Blender 4.0\\blender.exe',
+      'C:\\Program Files\\Blender Foundation\\Blender 3.6\\blender.exe',
     ];
     return candidates.find((p) => fs.existsSync(p)) ?? '';
   }

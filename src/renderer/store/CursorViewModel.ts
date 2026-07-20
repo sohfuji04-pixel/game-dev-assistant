@@ -3,11 +3,12 @@
  */
 import { ApiClient } from '../services/ApiClient';
 import { ViewModelBase } from './ViewModelBase';
-import type { PromptHistoryItem, PromptItem } from '@shared/types';
+import type { PromptHistoryItem, PromptItem, ToolConnectionStatus } from '@shared/types';
 
 export class CursorViewModel extends ViewModelBase {
   prompts: PromptItem[] = [];
   history: PromptHistoryItem[] = [];
+  connection: ToolConnectionStatus | null = null;
   searchQuery = '';
   editing: PromptItem | null = null;
   draftTitle = '';
@@ -15,17 +16,31 @@ export class CursorViewModel extends ViewModelBase {
   draftTags = '';
   message = '';
   loading = false;
+  checking = false;
 
   async load(): Promise<void> {
     this.loading = true;
     this.notify();
     try {
+      this.connection = await ApiClient.checkCursorConnection();
       this.prompts = this.searchQuery
         ? await ApiClient.searchPrompts(this.searchQuery)
         : await ApiClient.listPrompts();
       this.history = await ApiClient.listPromptHistory();
     } finally {
       this.loading = false;
+      this.notify();
+    }
+  }
+
+  async checkConnection(): Promise<void> {
+    this.checking = true;
+    this.notify();
+    try {
+      this.connection = await ApiClient.checkCursorConnection();
+      this.message = this.connection.message;
+    } finally {
+      this.checking = false;
       this.notify();
     }
   }

@@ -3,7 +3,12 @@
  */
 import { ApiClient } from '../services/ApiClient';
 import { ViewModelBase } from './ViewModelBase';
-import type { ChangelogEntry, RecentProject, BuildResult } from '@shared/types';
+import type {
+  ChangelogEntry,
+  RecentProject,
+  BuildResult,
+  ToolConnectionStatus,
+} from '@shared/types';
 import type { AppViewModel } from './AppViewModel';
 
 export class DashboardViewModel extends ViewModelBase {
@@ -11,7 +16,10 @@ export class DashboardViewModel extends ViewModelBase {
   changelog: ChangelogEntry[] = [];
   buildLog = '';
   loading = false;
+  checkingConnections = false;
   message = '';
+  cursorStatus: ToolConnectionStatus | null = null;
+  gitStatus: ToolConnectionStatus | null = null;
 
   constructor(private readonly app: AppViewModel) {
     super();
@@ -21,10 +29,31 @@ export class DashboardViewModel extends ViewModelBase {
     this.loading = true;
     this.notify();
     try {
-      this.recent = await ApiClient.listRecentProjects();
-      this.changelog = await ApiClient.listChangelog();
+      const [recent, changelog] = await Promise.all([
+        ApiClient.listRecentProjects(),
+        ApiClient.listChangelog(),
+      ]);
+      this.recent = recent;
+      this.changelog = changelog;
+      await this.checkConnections();
     } finally {
       this.loading = false;
+      this.notify();
+    }
+  }
+
+  async checkConnections(): Promise<void> {
+    this.checkingConnections = true;
+    this.notify();
+    try {
+      const snapshot = await ApiClient.checkToolsConnections();
+      this.cursorStatus = snapshot.cursor;
+      this.gitStatus = snapshot.git;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.message = `接続確認に失敗: ${message}`;
+    } finally {
+      this.checkingConnections = false;
       this.notify();
     }
   }

@@ -1,6 +1,9 @@
 /**
  * 自動更新サービス（electron-updater）
  * GitHub Releases から取得。起動時確認・再試行・日本語メッセージ対応。
+ *
+ * プライベートリポジトリや Release 未整備時は「error」にせず、
+ * 起動・操作を邪魔しない（not-available / idle）。
  */
 import electronUpdater from 'electron-updater';
 import type { AppSettings, UpdaterStatus } from '../../shared/types';
@@ -11,6 +14,8 @@ const { autoUpdater } = electronUpdater;
 export class UpdaterService {
   private status: UpdaterStatus = { status: 'idle' };
   private retryLeft = 0;
+  /** 想定内の取得失敗（404 / private 等）なら再試行しない */
+  private softFail = false;
 
   constructor(
     private readonly onStatus: (status: UpdaterStatus) => void,
@@ -21,6 +26,7 @@ export class UpdaterService {
     autoUpdater.allowDowngrade = false;
 
     autoUpdater.on('checking-for-update', () => {
+      this.softFail = false;
       this.emit({ status: 'checking', message: '更新を確認しています…' });
     });
 
@@ -56,17 +62,14 @@ export class UpdaterService {
     });
 
     autoUpdater.on('error', (error) => {
-      const message = this.mapError(error);
-      this.emit({ status: 'error', message });
-      this.log?.error('updater', '更新エラー', message);
-      void this.maybeRetry();
+      this.handleCheckFailure(error);
+      if (!this.softFail) void this.maybeRetry();
     });
   }
 
   /** 設定を反映（owner/repo/channel） */
   applySettings(settings: AppSettings): void {
     this.retryLeft = settings.updateRetryCount;
-    // setFeedURL は GitHub プロバイダ向け
     try {
       autoUpdater.setFeedURL({
         provider: 'github',
@@ -86,16 +89,46 @@ export class UpdaterService {
 
   async checkForUpdates(settings?: AppSettings): Promise<UpdaterStatus> {
     if (settings) this.applySettings(settings);
+    this.softFail = false;
     try {
       this.log?.info('updater', '更新確認開始');
       await autoUpdater.checkForUpdates();
     } catch (error) {
-      const message = this.mapError(error);
-      this.emit({ status: 'error', message });
-      this.log?.error('updater', '更新確認失敗', message);
-      await this.maybeRetry();
+      this.handleCheckFailure(error);
+      if (!this.softFail) await this.maybeRetry();
     }
     return this.status;
+  }
+
+  /**
+   * Release 取得失敗・プライベート repo・ネットワーク一時障害などは
+   * UI を赤くしない（ログのみ / not-available）。
+   */
+  private handleCheckFailure(error: unknown): void {
+    const raw = error instanceof Error ? error.message : String(error);
+
+    if (this.isSoftFailure(raw)) {
+      this.softFail = true;
+      this.retryLeft = 0;
+      this.emit({
+        status: 'not-available',
+        message:
+          '自動更新は現在利用できません（プライベートリポジトリ、または Release 未公開）。アプリ本体は通常どおり使えます。',
+      });
+      this.log?.warn('updater', '更新確認をスキップ（想定内）', raw);
+      return;
+    }
+
+    this.softFail = false;
+    const message = this.mapError(error);
+    this.emit({ status: 'error', message });
+    this.log?.error('updater', '更新確認失敗', message);
+  }
+
+  private isSoftFailure(raw: string): boolean {
+    return /401|403|404|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|net::|network|GitHub|latest\.yml|releases\.atom|private|Unable to find|Cannot find|HttpError|ERR_CONNECTION/i.test(
+      raw,
+    );
   }
 
   async downloadUpdate(): Promise<UpdaterStatus> {
@@ -103,6 +136,17 @@ export class UpdaterService {
       this.log?.info('updater', 'ダウンロード開始');
       await autoUpdater.downloadUpdate();
     } catch (error) {
+      const raw = error instanceof Error ? error.message : String(error);
+      if (this.isSoftFailure(raw)) {
+        this.softFail = true;
+        this.retryLeft = 0;
+        this.emit({
+          status: 'idle',
+          message: '更新のダウンロードは現在利用できません。',
+        });
+        this.log?.warn('updater', 'ダウンロード不可（想定内）', raw);
+        return this.status;
+      }
       const message = this.mapError(error);
       this.emit({ status: 'error', message });
       this.log?.error('updater', 'ダウンロード失敗', message);
@@ -118,7 +162,7 @@ export class UpdaterService {
   }
 
   private async maybeRetry(download = false): Promise<void> {
-    if (this.retryLeft <= 0) return;
+    if (this.softFail || this.retryLeft <= 0) return;
     this.retryLeft -= 1;
     this.log?.warn('updater', `再試行します（残り ${this.retryLeft}）`);
     await new Promise((r) => setTimeout(r, 2000));

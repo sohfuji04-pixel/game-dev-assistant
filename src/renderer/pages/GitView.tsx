@@ -16,6 +16,8 @@ export function GitView({ app }: Props) {
   useEffect(() => {
     if (app.currentProject) {
       void vm.refresh();
+    } else {
+      void vm.checkBinary();
     }
   }, [vm, app.currentProject?.path]);
 
@@ -23,6 +25,13 @@ export function GitView({ app }: Props) {
     <div className="page">
       <h2>Git</h2>
       <p className="lead">Commit / Push / Pull / Branch / Release</p>
+
+      {vm.connection && (
+        <div className={`conn-hint${vm.connection.ok ? ' ok' : ' ng'}`} style={{ marginBottom: '0.75rem' }}>
+          <span className={`status-dot${vm.connection.ok ? ' on' : ' off'}`} />
+          {vm.connection.message}
+        </div>
+      )}
 
       {vm.message && <div className="banner">{vm.message}</div>}
 
