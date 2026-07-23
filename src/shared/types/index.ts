@@ -43,6 +43,7 @@ export type {
   UiScreenDefinition,
   UiCreateAiRequest,
   UiCreateAiResult,
+  UiCreateAiChatGptPack,
   UiDesignSystemExportHint,
 } from './uiCreateAi';
 /** 最近開いたプロジェクト */

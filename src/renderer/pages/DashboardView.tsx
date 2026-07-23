@@ -111,6 +111,10 @@ export function DashboardView({ app }: Props) {
           <span className="qa-label">AI</span>
           <strong>ChatGPT</strong>
         </button>
+        <button type="button" className="qa-card" onClick={() => app.setPage('ui-create-ai')}>
+          <span className="qa-label">AI</span>
+          <strong>UI 作成 AI</strong>
+        </button>
         <button type="button" className="qa-card" onClick={() => app.setPage('blender')}>
           <span className="qa-label">3D</span>
           <strong>Blender AI</strong>

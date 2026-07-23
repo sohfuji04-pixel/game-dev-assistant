@@ -90,6 +90,21 @@ export interface UiCreateAiResult {
   appliedScreenId: UiScreenId | string;
   palette: UiColorPalette;
   generatedAt: string;
+  /** chatgpt = ChatGPT Web 貼り付け / local = 下書き */
+  source?: 'chatgpt' | 'openai' | 'paste';
+}
+
+/** ChatGPT（キー不要）向けに組み立てた依頼プロンプト一式 */
+export interface UiCreateAiChatGptPack {
+  /** chatgpt.com に貼る本文（system + user 結合） */
+  chatGptPrompt: string;
+  chatgptUrl: string;
+  detectedGenre: string;
+  appliedThemeId: Exclude<UiThemeId, 'auto'> | string;
+  appliedScreenId: UiScreenId | string;
+  palette: UiColorPalette;
+  preparedAt: string;
+  instructions: string;
 }
 
 /** 将来のデザインシステム / Figma 連携用の正規化メタ */

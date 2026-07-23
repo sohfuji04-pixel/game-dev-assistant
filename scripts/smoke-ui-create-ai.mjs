@@ -1,5 +1,5 @@
 /**
- * UI 作成 AI スモーク（dev サーバー前提）
+ * UI 作成 AI スモーク（dev サーバ前提・OpenAI API 不要）
  * Usage:
  *   1) npm run electron:dev
  *   2) npx electron scripts/smoke-ui-create-ai.mjs
@@ -17,6 +17,7 @@ const DEV_URL = process.env.GDA_SMOKE_URL || 'http://localhost:5173/';
 function fail(msg) {
   console.error('[FAIL]', msg);
   app.exit(1);
+  throw new Error(msg);
 }
 
 function ok(msg) {
@@ -102,6 +103,20 @@ const DEFAULT_SETTINGS = {
   unityProjectPath: '',
 };
 
+function makePack(overrides = {}) {
+  return {
+    chatGptPrompt: '【スモーク】ChatGPT 用プロンプト\nかわいい牧場ゲーム',
+    chatgptUrl: 'https://chatgpt.com/',
+    detectedGenre: 'かわいい牧場ゲーム',
+    appliedThemeId: 'cute',
+    appliedScreenId: 'home',
+    palette: THEMES[0].palette,
+    preparedAt: new Date().toISOString(),
+    instructions: 'ChatGPT に貼り付けて返答を戻してください（スモーク）',
+    ...overrides,
+  };
+}
+
 function assertPromptFiles() {
   const system = path.join(ROOT, 'src/main/ai/prompts/uiCreateAi/system.md');
   const review = path.join(ROOT, 'src/main/ai/prompts/uiCreateAi/review.md');
@@ -143,7 +158,9 @@ function assertSharedModules() {
 }
 
 function stubIpc() {
-  let lastGenerateInput = null;
+  let lastPrepareInput = null;
+  let lastAccept = null;
+  let openChatGptCalls = 0;
 
   const handlers = {
     'app:get-version': () => 'smoke-ui-create',
@@ -189,18 +206,37 @@ function stubIpc() {
     }),
     'ui-create:themes': () => THEMES,
     'ui-create:screens': () => SCREENS,
-    'ui-create:generate': (_input) => {
-      lastGenerateInput = _input;
+    'ui-create:prepare-chatgpt': (input) => {
+      lastPrepareInput = input;
+      return makePack();
+    },
+    'ui-create:prepare-review': (markdown) =>
+      makePack({
+        chatGptPrompt: '【スモーク】レビュー依頼\n' + String(markdown || '').slice(0, 80),
+        instructions: '改善レビュー用プロンプトをコピーしました（スモーク）',
+      }),
+    'ui-create:accept-paste': (input, markdown) => {
+      lastAccept = { input, markdown };
       return {
-        markdown: SAMPLE_MARKDOWN,
+        markdown: String(markdown || SAMPLE_MARKDOWN),
         detectedGenre: 'かわいい牧場ゲーム',
         appliedThemeId: 'cute',
         appliedScreenId: 'home',
         palette: THEMES[0].palette,
         generatedAt: new Date().toISOString(),
+        source: 'paste',
       };
     },
-    'ui-create:review': () => '## 問題点\n- なし（スモーク）\n\n## 改善案\n- 余白を少し増やす',
+    'ui-create:open-chatgpt': (url) => {
+      openChatGptCalls += 1;
+      return { ok: true, url: url || 'https://chatgpt.com/' };
+    },
+    'ui-create:generate': () => {
+      fail('OpenAI generate が呼ばれた（キーレスフローでは不要）');
+    },
+    'ui-create:review': () => {
+      fail('OpenAI review が呼ばれた（キーレスフローでは不要）');
+    },
     'cursor:send-prompt': () => ({ success: true, message: 'smoke: Cursor へ送信（スタブ）' }),
   };
 
@@ -235,12 +271,14 @@ function stubIpc() {
   }
 
   return {
-    getLastGenerateInput: () => lastGenerateInput,
+    getLastPrepareInput: () => lastPrepareInput,
+    getLastAccept: () => lastAccept,
+    getOpenChatGptCalls: () => openChatGptCalls,
   };
 }
 
 app.whenReady().then(async () => {
-  console.log('=== UI Create AI smoke ===');
+  console.log('=== UI Create AI smoke (ChatGPT keyless) ===');
   assertPromptFiles();
   assertSharedModules();
 
@@ -260,6 +298,14 @@ app.whenReady().then(async () => {
     },
   });
 
+  win.webContents.session.setPermissionRequestHandler((_wc, permission, callback) => {
+    if (permission === 'clipboard-sanitized-write' || permission === 'clipboard-read') {
+      callback(true);
+      return;
+    }
+    callback(false);
+  });
+
   try {
     await win.loadURL(DEV_URL);
   } catch (err) {
@@ -267,6 +313,8 @@ app.whenReady().then(async () => {
     return;
   }
   ok(`ロード: ${DEV_URL}`);
+  win.show();
+  win.focus();
   await new Promise((r) => setTimeout(r, 1800));
 
   const navClicked = await win.webContents.executeJavaScript(`
@@ -286,48 +334,99 @@ app.whenReady().then(async () => {
     (() => {
       const page = document.querySelector('.ui-create-page');
       const title = page?.querySelector('h2')?.textContent?.trim() || '';
-      const textarea = page?.querySelector('textarea');
-      const genBtn = [...(page?.querySelectorAll('button') || [])]
-        .find((b) => (b.textContent || '').includes('UI 設計を生成'));
-      const chips = [...(page?.querySelectorAll('.chip-btn') || [])]
-        .map((b) => b.textContent?.trim());
+      const textareas = [...(page?.querySelectorAll('textarea') || [])];
+      const promptArea = textareas[0];
+      const pasteArea = textareas.find((t) => {
+        const ph = t.getAttribute('placeholder') || '';
+        const label = t.closest('.field')?.querySelector('label')?.textContent || '';
+        return (
+          label.includes('ChatGPT') ||
+          label.includes('貼り付け') ||
+          ph.includes('ChatGPT') ||
+          ph.includes('貼り付け') ||
+          ph.includes('Markdown')
+        );
+      }) || textareas[1];
+      const primaryBtns = [...(page?.querySelectorAll('button.primary') || [])];
+      const chatgptBtn = primaryBtns.find((b) => (b.textContent || '').includes('ChatGPT'));
+      const acceptBtn = [...(page?.querySelectorAll('button') || [])].find((b) =>
+        (b.textContent || '').includes('結果として取り込む'),
+      );
+      const chips = [...(page?.querySelectorAll('.chip-btn') || [])].map((b) =>
+        b.textContent?.trim(),
+      );
       const select = page?.querySelector('select');
       const options = select
         ? [...select.options].map((o) => ({ value: o.value, label: o.textContent?.trim() }))
         : [];
-      const swatches = page?.querySelectorAll('.ui-create-swatch')?.length || 0;
+      const pasteLabel =
+        pasteArea?.closest('.field')?.querySelector('label')?.textContent?.trim() || '';
       return {
         title,
-        hasTextarea: Boolean(textarea),
-        prompt: textarea?.value || '',
-        hasGen: Boolean(genBtn),
+        hasPrompt: Boolean(promptArea),
+        hasPaste: Boolean(pasteArea),
+        pasteLabel,
+        pastePlaceholder: pasteArea?.getAttribute('placeholder') || '',
+        chatgptBtnText: chatgptBtn?.textContent?.trim() || '',
+        hasAccept: Boolean(acceptBtn),
         chips,
         screenOptions: options,
-        swatches,
       };
     })()
   `);
 
   if (ui.title !== 'UI 作成 AI') fail(`見出し不一致: ${JSON.stringify(ui)}`);
-  ok('見出し UI 作成 AI');
-  if (!ui.hasTextarea) fail('入力 textarea なし');
+  ok('見出し: UI 作成 AI');
+  if (!ui.hasPrompt) fail('入力 textarea なし');
   ok('自然言語入力欄');
-  if (!ui.hasGen) fail('生成ボタンなし');
-  ok('生成ボタン');
+  if (!ui.chatgptBtnText.includes('ChatGPT')) {
+    fail(`プライマリボタンに ChatGPT なし: ${ui.chatgptBtnText}`);
+  }
+  ok(`プライマリ: ${ui.chatgptBtnText}`);
+  const pasteOk =
+    ui.hasPaste &&
+    (ui.pasteLabel.includes('ChatGPT') ||
+      ui.pasteLabel.includes('貼り付け') ||
+      ui.pastePlaceholder.includes('ChatGPT') ||
+      ui.pastePlaceholder.includes('貼り付け') ||
+      ui.pastePlaceholder.includes('Markdown'));
+  if (!pasteOk) {
+    fail(`貼り付け欄なし: label=${ui.pasteLabel} ph=${ui.pastePlaceholder}`);
+  }
+  ok(`貼り付け欄: ${ui.pasteLabel || ui.pastePlaceholder.slice(0, 40)}`);
+  if (!ui.hasAccept) fail('「結果として取り込む」ボタンなし');
+  ok('結果として取り込むボタン');
   if (!ui.chips.includes('自動認識') || !ui.chips.includes('かわいい')) {
     fail(`テーマチップ不足: ${JSON.stringify(ui.chips)}`);
   }
   ok(`テーマチップ: ${ui.chips.join(', ')}`);
   if (!ui.screenOptions.some((o) => o.value === 'home')) fail('画面 select に home なし');
   ok(`画面テンプレ: ${ui.screenOptions.map((o) => o.label).join(', ')}`);
-  if (ui.swatches < 7) fail(`パレット swatch 不足: ${ui.swatches}`);
-  ok(`カラーパレット swatch ${ui.swatches}`);
 
-  // 入力して生成
-  const generated = await win.webContents.executeJavaScript(`
+
+  // navigator.clipboard は非フォーカス窓で失敗するためモック
+  await win.webContents.executeJavaScript(`
+    (() => {
+      const fake = {
+        writeText: async () => {},
+        readText: async () => '',
+      };
+      try {
+        Object.defineProperty(navigator, 'clipboard', {
+          configurable: true,
+          get: () => fake,
+        });
+      } catch {
+        navigator.clipboard.writeText = async () => {};
+      }
+      return true;
+    })()
+  `);
+
+  const prepared = await win.webContents.executeJavaScript(`
     (async () => {
       const page = document.querySelector('.ui-create-page');
-      const textarea = page.querySelector('textarea');
+      const textarea = page.querySelectorAll('textarea')[0];
       const nativeSet = Object.getOwnPropertyDescriptor(
         window.HTMLTextAreaElement.prototype,
         'value',
@@ -336,42 +435,92 @@ app.whenReady().then(async () => {
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
       textarea.dispatchEvent(new Event('change', { bubbles: true }));
 
-      const genBtn = [...page.querySelectorAll('button')]
-        .find((b) => (b.textContent || '').includes('UI 設計を生成'));
-      genBtn.click();
-      await new Promise((r) => setTimeout(r, 800));
+      const btn = [...page.querySelectorAll('button.primary')].find((b) =>
+        (b.textContent || '').includes('ChatGPT'),
+      );
+      if (!btn) return { ok: false, reason: 'no ChatGPT button' };
+      btn.click();
+      await new Promise((r) => setTimeout(r, 900));
+      const banner = document.querySelector('.banner')?.textContent?.trim() || '';
+      const preview = page.querySelector('.ui-create-prompt-preview');
+      return {
+        ok: true,
+        banner,
+        hasPreview: Boolean(preview),
+        previewText: preview?.querySelector('pre')?.textContent?.slice(0, 120) || '',
+      };
+    })()
+  `);
+  if (!prepared.ok) fail(`ChatGPT 生成クリック失敗: ${JSON.stringify(prepared)}`);
+  const prepInput = ipc.getLastPrepareInput();
+  if (!prepInput || !String(prepInput.prompt || '').includes('牧場')) {
+    fail(`prepare-chatgpt 入力不正: ${JSON.stringify(prepInput)}`);
+  }
+  ok(`IPC prepare-chatgpt: prompt 長さ ${String(prepInput.prompt).length}`);
+  if (ipc.getOpenChatGptCalls() < 1) fail('open-chatgpt が呼ばれていない');
+  ok(`IPC open-chatgpt calls: ${ipc.getOpenChatGptCalls()}`);
+  ok(`生成後バナー/プレビュー: ${(prepared.banner || prepared.previewText || '').slice(0, 80)}`);
+
+  const accepted = await win.webContents.executeJavaScript(`
+    (async () => {
+      const page = document.querySelector('.ui-create-page');
+      const textareas = [...page.querySelectorAll('textarea')];
+      const pasteArea =
+        textareas.find((t) => {
+          const ph = t.getAttribute('placeholder') || '';
+          const label = t.closest('.field')?.querySelector('label')?.textContent || '';
+          return (
+            label.includes('ChatGPT') ||
+            label.includes('貼り付け') ||
+            ph.includes('ChatGPT') ||
+            ph.includes('貼り付け') ||
+            ph.includes('Markdown')
+          );
+        }) || textareas[1];
+      if (!pasteArea) return { ok: false, reason: 'no paste textarea' };
+      const sample = '# ① UIコンセプト\\nかわいい牧場ゲーム向けホーム画面（スモーク）\\n\\n# ② レイアウト設計\\nSafeArea 対応\\n\\n# ⑦ Cursor実装プロンプト\\nHomeUI.ts を作成し、下部メニューを実装してください。';
+      const nativeSet = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        'value',
+      ).set;
+      nativeSet.call(pasteArea, sample);
+      pasteArea.dispatchEvent(new Event('input', { bubbles: true }));
+      pasteArea.dispatchEvent(new Event('change', { bubbles: true }));
+
+      const acceptBtn = [...page.querySelectorAll('button')].find((b) =>
+        (b.textContent || '').includes('結果として取り込む'),
+      );
+      if (!acceptBtn) return { ok: false, reason: 'no accept button' };
+      acceptBtn.click();
+      await new Promise((r) => setTimeout(r, 900));
 
       const result = page.querySelector('.ui-create-markdown')?.innerText || '';
       const meta = page.querySelector('.ui-create-result .meta')?.textContent?.trim() || '';
       const banner = document.querySelector('.banner')?.textContent?.trim() || '';
-      return { result, meta, banner };
+      return { ok: true, result, meta, banner };
     })()
   `);
-
-  if (!generated.result.includes('UIコンセプト') && !generated.result.includes('①')) {
-    fail(`生成結果なし: ${JSON.stringify(generated).slice(0, 400)}`);
+  if (!accepted.ok) fail(`取り込み失敗: ${JSON.stringify(accepted)}`);
+  if (!accepted.result.includes('UIコンセプト') && !accepted.result.includes('①')) {
+    fail(`結果表示なし: ${JSON.stringify(accepted).slice(0, 400)}`);
   }
-  ok('スタブ生成結果を表示');
-  if (!generated.meta.includes('cute') && !generated.meta.includes('home')) {
-    // meta は detectedGenre · theme · screen
-    if (!/牧場|cute|home/i.test(generated.meta + generated.banner)) {
-      fail(`メタ情報不足: meta=${generated.meta} banner=${generated.banner}`);
-    }
+  ok('スタブ取り込み結果を表示');
+  const lastAccept = ipc.getLastAccept();
+  if (!lastAccept || !String(lastAccept.markdown || '').includes('UIコンセプト')) {
+    fail(`accept-paste 入力不正: ${String(JSON.stringify(lastAccept)).slice(0, 300)}`);
   }
-  ok(`生成メタ: ${generated.meta || generated.banner}`);
-
-  const input = ipc.getLastGenerateInput();
-  if (!input || !String(input.prompt || '').includes('牧場')) {
-    fail(`generate IPC 入力不正: ${JSON.stringify(input)}`);
+  ok('IPC accept-paste 受信');
+  if (!/牧場|cute|home/i.test(accepted.meta + accepted.banner)) {
+    fail(`メタ情報不足: meta=${accepted.meta} banner=${accepted.banner}`);
   }
-  ok(`IPC generate 受信: prompt 長さ ${String(input.prompt).length}`);
+  ok(`取り込みメタ: ${accepted.meta || accepted.banner}`);
 
-  // Cursor プロンプト抽出ボタン
   const cursorCopy = await win.webContents.executeJavaScript(`
     (() => {
       const page = document.querySelector('.ui-create-page');
-      const btn = [...page.querySelectorAll('button')]
-        .find((b) => (b.textContent || '').includes('Cursor プロンプト'));
+      const btn = [...page.querySelectorAll('button')].find((b) =>
+        (b.textContent || '').includes('Cursor プロンプト'),
+      );
       return { enabled: btn && !btn.disabled, label: btn?.textContent?.trim() || '' };
     })()
   `);

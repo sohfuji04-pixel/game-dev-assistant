@@ -151,7 +151,7 @@ async function bootstrapServices(): Promise<AppServices> {
     mainWindow?.webContents.send(IpcChannels.CHAT_STREAM, event);
   });
   const promptBuilder = new PromptBuilderService(ai, projectMemory, log);
-  const uiCreateAi = new UiCreateAiService(ai, projectMemory, log);
+  const uiCreateAi = new UiCreateAiService(projectMemory, log);
 
   const watcher = new WatcherService((event) => {
     mainWindow?.webContents.send('watcher:event', event);

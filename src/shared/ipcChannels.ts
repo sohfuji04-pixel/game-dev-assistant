@@ -29,10 +29,15 @@ export const IpcChannels = {
   PROMPT_BUILD: 'prompt:build',
   CURSOR_SEND_PROMPT: 'cursor:send-prompt',
 
-  // UI 作成 AI
-  UI_CREATE_GENERATE: 'ui-create:generate',
+  // UI 作成 AI（ChatGPT Web・APIキー不要）
+  UI_CREATE_PREPARE_CHATGPT: 'ui-create:prepare-chatgpt',
+  UI_CREATE_PREPARE_REVIEW: 'ui-create:prepare-review',
+  UI_CREATE_ACCEPT_PASTE: 'ui-create:accept-paste',
+  UI_CREATE_OPEN_CHATGPT: 'ui-create:open-chatgpt',
   UI_CREATE_THEMES: 'ui-create:themes',
   UI_CREATE_SCREENS: 'ui-create:screens',
+  // 互換（旧呼び出し）
+  UI_CREATE_GENERATE: 'ui-create:generate',
   UI_CREATE_REVIEW: 'ui-create:review',
 
   // Project Memory

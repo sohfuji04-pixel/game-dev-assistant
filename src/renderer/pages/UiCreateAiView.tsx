@@ -1,5 +1,5 @@
 /**
- * ゲーム UI 作成 AI View
+ * ゲーム UI 作成 AI View — ChatGPT（Web・APIキー不要）
  */
 import { useEffect } from 'react';
 import { useViewModel } from '../store/ViewModelBase';
@@ -27,8 +27,8 @@ export function UiCreateAiView({ app }: Props) {
         <div>
           <h2>UI 作成 AI</h2>
           <p className="lead">
-            「かわいい牧場ゲーム / ホーム画面」のように入力するだけで、設計書・実装仕様・Cursor
-            プロンプトを一括生成します
+            OpenAI APIキーは不要です。「かわいい牧場ゲーム / ホーム画面」と入力し、ChatGPT
+            で設計書を生成 → 返答を貼り付けてください
           </p>
         </div>
       </header>
@@ -122,7 +122,7 @@ export function UiCreateAiView({ app }: Props) {
               checked={vm.includeReview}
               onChange={(e) => vm.setIncludeReview(e.target.checked)}
             />
-            生成後に UI 改善 AI レビューを含める
+            生成依頼に UI 改善レビュー（⑪）を含める
           </label>
 
           {palette && (
@@ -154,9 +154,37 @@ export function UiCreateAiView({ app }: Props) {
               type="button"
               className="primary"
               disabled={vm.busy || !vm.prompt.trim()}
-              onClick={() => void vm.generate()}
+              onClick={() => void vm.openWithChatGpt()}
             >
-              {vm.busy ? '生成中…' : 'UI 設計を生成'}
+              {vm.busy ? '準備中…' : 'ChatGPT で生成'}
+            </button>
+            <button
+              type="button"
+              disabled={vm.busy || !vm.prompt.trim()}
+              onClick={() => void vm.copyChatGptPrompt()}
+            >
+              プロンプトのみコピー
+            </button>
+          </div>
+
+          <div className="field">
+            <label>ChatGPT の返答を貼り付け</label>
+            <textarea
+              rows={8}
+              value={vm.pasteDraft}
+              onChange={(e) => vm.setPasteDraft(e.target.value)}
+              placeholder="ChatGPT が返した Markdown をここに貼り付け…"
+            />
+          </div>
+
+          <div className="row wrap">
+            <button
+              type="button"
+              className="primary"
+              disabled={vm.busy || !vm.pasteDraft.trim()}
+              onClick={() => void vm.applyPaste()}
+            >
+              結果として取り込む
             </button>
             <button type="button" disabled={!vm.result} onClick={() => void vm.copy()}>
               全文コピー
@@ -181,9 +209,18 @@ export function UiCreateAiView({ app }: Props) {
               disabled={!vm.result || vm.busy}
               onClick={() => void vm.reReview()}
             >
-              改善レビュー再実行
+              ChatGPT で改善レビュー
             </button>
           </div>
+
+          {vm.chatGptPack && (
+            <details className="ui-create-prompt-preview">
+              <summary>ChatGPT へ送るプロンプト（プレビュー）</summary>
+              <pre className="mono hub-log" style={{ whiteSpace: 'pre-wrap', maxHeight: 220 }}>
+                {vm.chatGptPack.chatGptPrompt}
+              </pre>
+            </details>
+          )}
         </section>
 
         <section className="panel glass-panel ui-create-result">
@@ -203,7 +240,10 @@ export function UiCreateAiView({ app }: Props) {
             />
           ) : (
             <pre className="mono hub-log" style={{ minHeight: 280, whiteSpace: 'pre-wrap' }}>
-              まだ生成されていません。左の入力から生成してください。
+              {`手順:
+1. 「ChatGPT で生成」を押す（プロンプトをコピーして ChatGPT を開きます）
+2. ChatGPT に貼り付けて送信
+3. 返答を左の欄に貼り付け「結果として取り込む」`}
             </pre>
           )}
         </section>

@@ -1,11 +1,13 @@
 /**
- * UI 作成 AI ViewModel
+ * UI 作成 AI ViewModel — ChatGPT（Web・APIキー不要）
  */
 import { ApiClient } from '../services/ApiClient';
 import { ViewModelBase } from './ViewModelBase';
 import type { AppViewModel } from './AppViewModel';
 import type {
   UiColorPalette,
+  UiCreateAiChatGptPack,
+  UiCreateAiRequest,
   UiCreateAiResult,
   UiDeviceTarget,
   UiOrientation,
@@ -36,6 +38,10 @@ export class UiCreateAiViewModel extends ViewModelBase {
   includeReview = true;
   themes: ThemeOption[] = [];
   screens: ScreenOption[] = [];
+  /** ChatGPT に渡す依頼プロンプト */
+  chatGptPack: UiCreateAiChatGptPack | null = null;
+  /** ChatGPT 返答の貼り付け欄 */
+  pasteDraft = '';
   result: UiCreateAiResult | null = null;
   busy = false;
   message = '';
@@ -88,27 +94,73 @@ export class UiCreateAiViewModel extends ViewModelBase {
     this.notify();
   }
 
+  setPasteDraft(value: string): void {
+    this.pasteDraft = value;
+    this.notify();
+  }
+
   get previewPalette(): UiColorPalette | null {
     if (this.result?.palette) return this.result.palette;
+    if (this.chatGptPack?.palette) return this.chatGptPack.palette;
     if (this.themeId === 'auto') return this.themes[0]?.palette ?? null;
     return this.themes.find((t) => t.id === this.themeId)?.palette ?? null;
   }
 
-  async generate(): Promise<void> {
+  private buildRequest(): UiCreateAiRequest {
+    return {
+      prompt: this.prompt,
+      themeId: this.themeId,
+      screenId: this.screenId === 'auto' ? null : this.screenId,
+      orientation: this.orientation,
+      deviceTarget: this.deviceTarget,
+      includeReview: this.includeReview,
+      projectPath: this.app.currentProject?.path ?? null,
+    };
+  }
+
+  /** プロンプトを組み立て → コピー → ChatGPT を開く（キー不要） */
+  async openWithChatGpt(): Promise<void> {
     this.busy = true;
     this.message = '';
     this.notify();
     try {
-      this.result = await ApiClient.uiCreateGenerate({
-        prompt: this.prompt,
-        themeId: this.themeId,
-        screenId: this.screenId === 'auto' ? null : this.screenId,
-        orientation: this.orientation,
-        deviceTarget: this.deviceTarget,
-        includeReview: this.includeReview,
-        projectPath: this.app.currentProject?.path ?? null,
-      });
-      this.message = `生成完了（${this.result.detectedGenre} / ${this.result.appliedThemeId} / ${this.result.appliedScreenId}）`;
+      this.chatGptPack = await ApiClient.uiCreatePrepareChatGpt(this.buildRequest());
+      await navigator.clipboard.writeText(this.chatGptPack.chatGptPrompt);
+      await ApiClient.uiCreateOpenChatGpt(this.chatGptPack.chatgptUrl);
+      this.message = this.chatGptPack.instructions;
+    } catch (error) {
+      this.message = error instanceof Error ? error.message : String(error);
+    } finally {
+      this.busy = false;
+      this.notify();
+    }
+  }
+
+  async copyChatGptPrompt(): Promise<void> {
+    this.busy = true;
+    this.message = '';
+    this.notify();
+    try {
+      if (!this.chatGptPack) {
+        this.chatGptPack = await ApiClient.uiCreatePrepareChatGpt(this.buildRequest());
+      }
+      await navigator.clipboard.writeText(this.chatGptPack.chatGptPrompt);
+      this.message = 'ChatGPT 用プロンプトをコピーしました';
+    } catch (error) {
+      this.message = error instanceof Error ? error.message : String(error);
+    } finally {
+      this.busy = false;
+      this.notify();
+    }
+  }
+
+  async applyPaste(): Promise<void> {
+    this.busy = true;
+    this.message = '';
+    this.notify();
+    try {
+      this.result = await ApiClient.uiCreateAcceptPaste(this.buildRequest(), this.pasteDraft);
+      this.message = `ChatGPT の返答を取り込みました（${this.result.detectedGenre} / ${this.result.appliedThemeId} / ${this.result.appliedScreenId}）`;
     } catch (error) {
       this.message = error instanceof Error ? error.message : String(error);
     } finally {
@@ -123,12 +175,11 @@ export class UiCreateAiViewModel extends ViewModelBase {
     this.message = '';
     this.notify();
     try {
-      const review = await ApiClient.uiCreateReview(this.result.markdown);
-      this.result = {
-        ...this.result,
-        markdown: `${this.result.markdown.trim()}\n\n---\n\n# ⑪ UI改善AIレビュー（再実行）\n\n${review.trim()}\n`,
-      };
-      this.message = '改善レビューを追記しました';
+      const pack = await ApiClient.uiCreatePrepareReview(this.result.markdown);
+      await navigator.clipboard.writeText(pack.chatGptPrompt);
+      await ApiClient.uiCreateOpenChatGpt(pack.chatgptUrl);
+      this.chatGptPack = pack;
+      this.message = pack.instructions;
     } catch (error) {
       this.message = error instanceof Error ? error.message : String(error);
     } finally {

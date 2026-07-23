@@ -1388,6 +1388,17 @@ code {
   display: none;
 }
 
+.ui-create-prompt-preview {
+  margin-top: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.ui-create-prompt-preview summary {
+  cursor: pointer;
+  margin-bottom: 0.35rem;
+}
+
 .row.wrap {
   flex-wrap: wrap;
 }

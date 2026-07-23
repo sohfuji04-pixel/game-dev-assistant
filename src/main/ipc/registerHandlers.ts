@@ -138,14 +138,28 @@ export function registerIpcHandlers(services: AppServices, getWindow: GetWindow)
     (_e, prompt: string, folderPath?: string) => cursor.sendPromptToCursor(prompt, folderPath),
   );
 
-  // --- UI 作成 AI ---
+  // --- UI 作成 AI（ChatGPT Web・APIキー不要） ---
   ipcMain.handle(IpcChannels.UI_CREATE_THEMES, () => uiCreateAi.listThemes());
   ipcMain.handle(IpcChannels.UI_CREATE_SCREENS, () => uiCreateAi.listScreens());
+  ipcMain.handle(IpcChannels.UI_CREATE_PREPARE_CHATGPT, (_e, input: UiCreateAiRequest) =>
+    uiCreateAi.prepareChatGpt(input),
+  );
+  ipcMain.handle(IpcChannels.UI_CREATE_PREPARE_REVIEW, (_e, markdown: string) =>
+    uiCreateAi.prepareReviewPrompt(markdown),
+  );
+  ipcMain.handle(
+    IpcChannels.UI_CREATE_ACCEPT_PASTE,
+    (_e, input: UiCreateAiRequest, markdown: string) => uiCreateAi.acceptPaste(input, markdown),
+  );
+  ipcMain.handle(IpcChannels.UI_CREATE_OPEN_CHATGPT, (_e, url?: string) =>
+    uiCreateAi.openChatGpt(url),
+  );
+  // 互換: 旧 generate / review は ChatGPT 準備に委譲
   ipcMain.handle(IpcChannels.UI_CREATE_GENERATE, (_e, input: UiCreateAiRequest) =>
-    uiCreateAi.generate(input),
+    uiCreateAi.prepareChatGpt(input),
   );
   ipcMain.handle(IpcChannels.UI_CREATE_REVIEW, (_e, markdown: string) =>
-    uiCreateAi.reviewMarkdown(markdown),
+    uiCreateAi.prepareReviewPrompt(markdown),
   );
 
   // --- Project Memory ---

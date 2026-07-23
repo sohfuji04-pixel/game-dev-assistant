@@ -34,6 +34,7 @@ import type {
   UnityQuickCommand,
   UiCreateAiRequest,
   UiCreateAiResult,
+  UiCreateAiChatGptPack,
   UiColorPalette,
 } from '@shared/types';
 
@@ -111,10 +112,14 @@ export const ApiClient = {
     api().invoke<
       Array<{ id: string; label: string; description: string; typicalIcons: string[] }>
     >(IpcChannels.UI_CREATE_SCREENS),
-  uiCreateGenerate: (input: UiCreateAiRequest) =>
-    api().invoke<UiCreateAiResult>(IpcChannels.UI_CREATE_GENERATE, input),
-  uiCreateReview: (markdown: string) =>
-    api().invoke<string>(IpcChannels.UI_CREATE_REVIEW, markdown),
+  uiCreatePrepareChatGpt: (input: UiCreateAiRequest) =>
+    api().invoke<UiCreateAiChatGptPack>(IpcChannels.UI_CREATE_PREPARE_CHATGPT, input),
+  uiCreatePrepareReview: (markdown: string) =>
+    api().invoke<UiCreateAiChatGptPack>(IpcChannels.UI_CREATE_PREPARE_REVIEW, markdown),
+  uiCreateAcceptPaste: (input: UiCreateAiRequest, markdown: string) =>
+    api().invoke<UiCreateAiResult>(IpcChannels.UI_CREATE_ACCEPT_PASTE, input, markdown),
+  uiCreateOpenChatGpt: (url?: string) =>
+    api().invoke<{ ok: boolean; url: string }>(IpcChannels.UI_CREATE_OPEN_CHATGPT, url),
 
   memoryGet: (projectPath: string) =>
     api().invoke<import('@shared/types').ProjectMemory | null>(IpcChannels.MEMORY_GET, projectPath),

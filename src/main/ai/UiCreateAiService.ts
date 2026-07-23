@@ -1,11 +1,13 @@
 /**
- * ゲーム UI 作成 AI — 設計書一括生成サービス
+ * ゲーム UI 作成 AI — ChatGPT（Web・APIキー不要）向け
+ * OpenAI API は使わず、依頼プロンプトを組み立てて ChatGPT に渡す。
  */
-import type { AiProviderRouter } from './AiProviderRouter';
+import { shell } from 'electron';
 import type { ProjectMemoryService } from './ProjectMemoryService';
 import type { LogService } from '../logs/LogService';
 import type {
   UiColorPalette,
+  UiCreateAiChatGptPack,
   UiCreateAiRequest,
   UiCreateAiResult,
   UiThemeId,
@@ -21,6 +23,8 @@ import {
 } from '../../shared/uiCreateAi';
 import { loadUiCreateReviewPrompt, loadUiCreateSystemPrompt } from './prompts/uiCreateAi/loadPrompts';
 
+export const CHATGPT_WEB_URL = 'https://chatgpt.com/';
+
 function formatPalette(palette: UiColorPalette): string {
   return [
     `Primary: ${palette.primary}`,
@@ -35,7 +39,6 @@ function formatPalette(palette: UiColorPalette): string {
 
 export class UiCreateAiService {
   constructor(
-    private readonly ai: AiProviderRouter,
     private readonly memory: ProjectMemoryService,
     private readonly log: LogService,
   ) {}
@@ -72,7 +75,92 @@ export class UiCreateAiService {
     return detectScreenFromText(prompt);
   }
 
-  async generate(input: UiCreateAiRequest): Promise<UiCreateAiResult> {
+  /** ChatGPT 用プロンプトを組み立て（APIキー不要） */
+  prepareChatGpt(input: UiCreateAiRequest): UiCreateAiChatGptPack {
+    const { context, theme, screen, genre } = this.buildContext(input);
+    const system = loadUiCreateSystemPrompt();
+    const chatGptPrompt = [
+      system,
+      '',
+      '---',
+      '',
+      context,
+      '',
+      '【重要】OpenAI APIキーは不要です。この ChatGPT チャット上で Markdown として必須セクションをすべて出力してください。前置きは不要です。',
+    ].join('\n');
+
+    this.log.info('ui-create-ai', `ChatGPT用プロンプト準備 theme=${theme.id} screen=${screen.id}`);
+
+    return {
+      chatGptPrompt,
+      chatgptUrl: CHATGPT_WEB_URL,
+      detectedGenre: genre,
+      appliedThemeId: theme.id,
+      appliedScreenId: screen.id,
+      palette: theme.palette,
+      preparedAt: new Date().toISOString(),
+      instructions:
+        'プロンプトをコピー済みです。開いた ChatGPT に貼り付けて送信し、返答の Markdown をこの画面へ貼り付けてください。',
+    };
+  }
+
+  /** 改善レビュー用プロンプト（APIキー不要） */
+  prepareReviewPrompt(markdown: string): UiCreateAiChatGptPack {
+    const body = (markdown ?? '').trim();
+    if (!body) throw new Error('レビュー対象の Markdown がありません。');
+    const chatGptPrompt = [
+      loadUiCreateReviewPrompt(),
+      '',
+      '---',
+      '',
+      '【レビュー対象】',
+      body.slice(0, 24000),
+    ].join('\n');
+    return {
+      chatGptPrompt,
+      chatgptUrl: CHATGPT_WEB_URL,
+      detectedGenre: '',
+      appliedThemeId: '',
+      appliedScreenId: '',
+      palette: {
+        primary: '#888',
+        secondary: '#666',
+        accent: '#aaa',
+        background: '#111',
+        text: '#eee',
+        warning: '#f5a',
+        success: '#5a5',
+      },
+      preparedAt: new Date().toISOString(),
+      instructions:
+        '改善レビュー用プロンプトをコピーしました。ChatGPT に貼り付けて送信し、返答を結果へ追記してください。',
+    };
+  }
+
+  /** ChatGPT 返答を結果として取り込む */
+  acceptPaste(input: UiCreateAiRequest, markdown: string): UiCreateAiResult {
+    const text = (markdown ?? '').trim();
+    if (!text) throw new Error('ChatGPT の返答 Markdown を貼り付けてください。');
+    const { theme, screen, genre } = this.buildContext(input);
+    return {
+      markdown: text,
+      detectedGenre: genre,
+      appliedThemeId: theme.id,
+      appliedScreenId: screen.id,
+      palette: theme.palette,
+      generatedAt: new Date().toISOString(),
+      source: 'paste',
+    };
+  }
+
+  async openChatGpt(url = CHATGPT_WEB_URL): Promise<{ ok: boolean; url: string }> {
+    const target = url?.trim() || CHATGPT_WEB_URL;
+    await shell.openExternal(target);
+    this.log.info('ui-create-ai', 'ChatGPT を外部ブラウザで開きました', target);
+    return { ok: true, url: target };
+  }
+
+  private buildContext(input: UiCreateAiRequest) {
     const prompt = (input.prompt ?? '').trim();
     if (!prompt) {
       throw new Error('UI の説明（例: かわいい牧場ゲーム / ホーム画面）を入力してください。');
@@ -93,8 +181,7 @@ export class UiCreateAiService {
       : null;
     const memoryBlock = this.memory.toContextBlock(mem);
 
-    const system = loadUiCreateSystemPrompt();
-    const userParts = [
+    const context = [
       memoryBlock,
       `【ユーザー入力】\n${prompt}`,
       `【推定ジャンル】\n${genre}`,
@@ -104,7 +191,13 @@ export class UiCreateAiService {
       `【推奨コンポーネント】\n${screen.typicalComponents.join(', ')}`,
       `【推奨アイコン案】\n${screen.typicalIcons.join(', ')}`,
       `【向き】\n${orientation === 'portrait' ? '縦画面' : '横画面'}`,
-      `【デバイス】\n${deviceTarget === 'phone' ? 'Androidスマホ' : deviceTarget === 'tablet' ? 'Androidタブレット' : 'Androidスマホ + タブレット'}`,
+      `【デバイス】\n${
+        deviceTarget === 'phone'
+          ? 'Androidスマホ'
+          : deviceTarget === 'tablet'
+            ? 'Androidタブレット'
+            : 'Androidスマホ + タブレット'
+      }`,
       `【実装ターゲット】\n${implementationTarget}`,
       includeReview
         ? '【追加】セクション⑪ UI改善AIレビューを必ず含めること。'
@@ -112,49 +205,10 @@ export class UiCreateAiService {
       '上記に基づき、必須セクション①〜⑩' +
         (includeReview ? '＋⑪' : '') +
         'を高品質に一括生成してください。',
-    ].filter(Boolean);
+    ]
+      .filter(Boolean)
+      .join('\n\n');
 
-    const provider = this.ai.requireOpenAi();
-    try {
-      let markdown = await provider.completeChat({
-        model: this.ai.getModel(),
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: userParts.join('\n\n') },
-        ],
-      });
-
-      // レビューが薄い場合の補強パス（明示リクエスト時）
-      if (includeReview && !/⑪|UI改善/.test(markdown)) {
-        const review = await this.reviewMarkdown(markdown);
-        markdown = `${markdown.trim()}\n\n---\n\n# ⑪ UI改善AIレビュー\n\n${review.trim()}\n`;
-      }
-
-      const result: UiCreateAiResult = {
-        markdown: markdown.trim(),
-        detectedGenre: genre,
-        appliedThemeId: theme.id,
-        appliedScreenId: screen.id,
-        palette: theme.palette,
-        generatedAt: new Date().toISOString(),
-      };
-      this.log.info('ui-create-ai', `生成完了 theme=${theme.id} screen=${screen.id}`);
-      return result;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.log.error('ui-create-ai', message);
-      throw error;
-    }
-  }
-
-  async reviewMarkdown(markdown: string): Promise<string> {
-    const provider = this.ai.requireOpenAi();
-    return provider.completeChat({
-      model: this.ai.getModel(),
-      messages: [
-        { role: 'system', content: loadUiCreateReviewPrompt() },
-        { role: 'user', content: markdown.slice(0, 24000) },
-      ],
-    });
+    return { context, theme, screen, genre };
   }
 }
