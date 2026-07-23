@@ -29,6 +29,12 @@ export const IpcChannels = {
   PROMPT_BUILD: 'prompt:build',
   CURSOR_SEND_PROMPT: 'cursor:send-prompt',
 
+  // UI 作成 AI
+  UI_CREATE_GENERATE: 'ui-create:generate',
+  UI_CREATE_THEMES: 'ui-create:themes',
+  UI_CREATE_SCREENS: 'ui-create:screens',
+  UI_CREATE_REVIEW: 'ui-create:review',
+
   // Project Memory
   MEMORY_GET: 'memory:get',
   MEMORY_SAVE: 'memory:save',
@@ -111,6 +117,7 @@ export const IpcChannels = {
   HUB_RUN_SCRIPT: 'hub:run-script',
   HUB_OPEN_EXTERNAL: 'hub:open-external',
   PROJECT_REVEAL: 'project:reveal',
+  PROJECT_WRITE_TEXT: 'project:write-text',
 
   // Blender AI
   BLENDER_STATUS: 'blender:status',

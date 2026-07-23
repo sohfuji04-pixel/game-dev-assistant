@@ -33,6 +33,18 @@ export type {
 export type { ProjectMemory } from './projectMemory';
 export { EMPTY_PROJECT_MEMORY } from './projectMemory';
 
+export type {
+  UiThemeId,
+  UiScreenId,
+  UiOrientation,
+  UiDeviceTarget,
+  UiColorPalette,
+  UiThemeDefinition,
+  UiScreenDefinition,
+  UiCreateAiRequest,
+  UiCreateAiResult,
+  UiDesignSystemExportHint,
+} from './uiCreateAi';
 /** 最近開いたプロジェクト */
 export interface RecentProject {
   id: string;

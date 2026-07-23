@@ -32,6 +32,9 @@ import type {
   UnityConnectionStatus,
   UnityChatMessage,
   UnityQuickCommand,
+  UiCreateAiRequest,
+  UiCreateAiResult,
+  UiColorPalette,
 } from '@shared/types';
 
 function api() {
@@ -99,6 +102,19 @@ export const ApiClient = {
       prompt,
       folderPath,
     ),
+
+  uiCreateThemes: () =>
+    api().invoke<
+      Array<{ id: string; label: string; description: string; palette: UiColorPalette }>
+    >(IpcChannels.UI_CREATE_THEMES),
+  uiCreateScreens: () =>
+    api().invoke<
+      Array<{ id: string; label: string; description: string; typicalIcons: string[] }>
+    >(IpcChannels.UI_CREATE_SCREENS),
+  uiCreateGenerate: (input: UiCreateAiRequest) =>
+    api().invoke<UiCreateAiResult>(IpcChannels.UI_CREATE_GENERATE, input),
+  uiCreateReview: (markdown: string) =>
+    api().invoke<string>(IpcChannels.UI_CREATE_REVIEW, markdown),
 
   memoryGet: (projectPath: string) =>
     api().invoke<import('@shared/types').ProjectMemory | null>(IpcChannels.MEMORY_GET, projectPath),
@@ -218,6 +234,11 @@ export const ApiClient = {
   hubOpenExternal: (url: string, projectRoot?: string) =>
     api().invoke<void>(IpcChannels.HUB_OPEN_EXTERNAL, url, projectRoot),
   revealInFolder: (targetPath: string) => api().invoke<void>(IpcChannels.PROJECT_REVEAL, targetPath),
+  projectWriteText: (payload: { projectRoot: string; relativePath: string; content: string }) =>
+    api().invoke<{ success: boolean; message: string; absolutePath?: string }>(
+      IpcChannels.PROJECT_WRITE_TEXT,
+      payload,
+    ),
 
   blenderStatus: () => api().invoke<BlenderConnectionStatus>(IpcChannels.BLENDER_STATUS),
   blenderConnect: () => api().invoke<BlenderConnectionStatus>(IpcChannels.BLENDER_CONNECT),

@@ -14,12 +14,13 @@ const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
     ],
   },
   {
-    label: 'AI',
+    label: 'AI / 3D',
     items: [
       { kind: 'page', id: 'chatgpt', label: 'ChatGPT', hint: '3' },
       { kind: 'page', id: 'blender', label: 'Blender AI' },
       { kind: 'page', id: 'unity', label: 'Unity AI' },
       { kind: 'page', id: 'prompt-builder', label: 'Prompt Builder' },
+      { kind: 'page', id: 'ui-create-ai', label: 'UI 作成 AI' },
       { kind: 'page', id: 'image-ai', label: 'Image AI' },
       { kind: 'page', id: 'vision-ai', label: 'Vision AI' },
     ],

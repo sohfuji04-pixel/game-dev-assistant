@@ -23,6 +23,7 @@ import { SecretStore, SECRET_OPENAI_KEY } from './security/SecretStore';
 import { AiProviderRouter } from './ai/AiProviderRouter';
 import { ChatGptService } from './ai/ChatGptService';
 import { PromptBuilderService } from './ai/PromptBuilderService';
+import { UiCreateAiService } from './ai/UiCreateAiService';
 import { ProjectMemoryService } from './ai/ProjectMemoryService';
 import { BlenderConnectionService } from './blender/BlenderConnectionService';
 import { BlenderAIChatService } from './blender/BlenderAIChatService';
@@ -51,6 +52,7 @@ export interface AppServices {
   ai: AiProviderRouter;
   chatGpt: ChatGptService;
   promptBuilder: PromptBuilderService;
+  uiCreateAi: UiCreateAiService;
   projectMemory: ProjectMemoryService;
   watcher: WatcherService;
   updater: UpdaterService;
@@ -149,6 +151,7 @@ async function bootstrapServices(): Promise<AppServices> {
     mainWindow?.webContents.send(IpcChannels.CHAT_STREAM, event);
   });
   const promptBuilder = new PromptBuilderService(ai, projectMemory, log);
+  const uiCreateAi = new UiCreateAiService(ai, projectMemory, log);
 
   const watcher = new WatcherService((event) => {
     mainWindow?.webContents.send('watcher:event', event);
@@ -200,6 +203,7 @@ async function bootstrapServices(): Promise<AppServices> {
     ai,
     chatGpt,
     promptBuilder,
+    uiCreateAi,
     projectMemory,
     watcher,
     updater,

@@ -14,6 +14,7 @@ import { BlenderView } from './pages/BlenderView';
 import { UnityView } from './pages/UnityView';
 import { ChatGptView } from './pages/ChatGptView';
 import { PromptBuilderView } from './pages/PromptBuilderView';
+import { UiCreateAiView } from './pages/UiCreateAiView';
 import { ProjectMemoryView } from './pages/ProjectMemoryView';
 import { AiPlaceholderView } from './pages/AiPlaceholderView';
 import { getAppViewModel, type AppPage } from './store/AppViewModel';
@@ -170,6 +171,7 @@ export default function App() {
         {app.page === 'blender' && <BlenderView />}
         {app.page === 'unity' && <UnityView />}
         {app.page === 'prompt-builder' && <PromptBuilderView app={app} />}
+        {app.page === 'ui-create-ai' && <UiCreateAiView app={app} />}
         {app.page === 'image-ai' && (
           <AiPlaceholderView title="Image AI" description="画像生成（Phase 2 で実装予定）" />
         )}

@@ -11,9 +11,16 @@ export function renderSimpleMarkdown(src: string): string {
     return `<pre class="md-code" data-lang="${lang}"><code>${code}</code></pre>`;
   });
 
-  const withInline = withCode
+  const withHeadings = withCode
+    .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+    .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^# (.+)$/gm, '<h2>$1</h2>');
+
+  const withInline = withHeadings
     .replace(/`([^`]+)`/g, '<code class="md-inline">$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/^\s*[-*] (.+)$/gm, '<li>$1</li>')
+    .replace(/(?:<li>.*<\/li>\n?)+/g, (block) => `<ul>${block}</ul>`)
     .replace(/\n/g, '<br/>');
 
   return withInline;

@@ -1,9 +1,14 @@
 /**
- * ChatGPT View
+ * ChatGPT View — 反映先指定対応
  */
 import { useEffect, useRef } from 'react';
 import { useViewModel } from '../store/ViewModelBase';
-import { ChatGptViewModel, CHAT_MODE_OPTIONS } from '../store/ChatGptViewModel';
+import {
+  ChatGptViewModel,
+  CHAT_MODE_OPTIONS,
+  CHAT_APPLY_TARGETS,
+  type ChatApplyTarget,
+} from '../store/ChatGptViewModel';
 import type { AppViewModel } from '../store/AppViewModel';
 import { renderSimpleMarkdown } from '../utils/markdown';
 
@@ -14,7 +19,7 @@ interface Props {
 export function ChatGptView({ app }: Props) {
   const vm = useViewModel(() => new ChatGptViewModel(app));
   const bottomRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const targetLabel = vm.applyTargetMeta.label;
 
   useEffect(() => {
     void vm.load();
@@ -25,18 +30,27 @@ export function ChatGptView({ app }: Props) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [vm.messages.length, vm.messages[vm.messages.length - 1]?.content]);
 
+  const bannerClass =
+    vm.messageKind === 'success'
+      ? 'banner success'
+      : vm.messageKind === 'error'
+        ? 'banner error'
+        : vm.messageKind === 'warn'
+          ? 'banner warn'
+          : 'banner';
+
   return (
     <div className="page chatgpt-page">
       <header className="page-header">
         <div>
           <h2>ChatGPT</h2>
-          <p className="lead">ゲーム開発向け AI チャット（ストリーミング・モード切替・履歴）</p>
+          <p className="lead">返答をそのまま指定先へ反映できます</p>
         </div>
       </header>
 
-      {vm.message && <div className="banner">{vm.message}</div>}
+      {vm.message && <div className={bannerClass}>{vm.message}</div>}
 
-      <div className="ai-mode-bar">
+      <div className="ai-mode-bar" role="toolbar" aria-label="チャットモード">
         {CHAT_MODE_OPTIONS.map((m) => (
           <button
             key={m.id}
@@ -49,6 +63,49 @@ export function ChatGptView({ app }: Props) {
         ))}
       </div>
 
+      <section className="panel apply-target-bar glass-panel">
+        <div className="apply-target-fields">
+          <div className="field apply-field-target">
+            <label htmlFor="chatgpt-apply-target">反映先</label>
+            <select
+              id="chatgpt-apply-target"
+              value={vm.applyTarget}
+              onChange={(e) => vm.setApplyTarget(e.target.value as ChatApplyTarget)}
+            >
+              {CHAT_APPLY_TARGETS.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {vm.applyTarget === 'file' && (
+            <div className="field apply-field-path">
+              <label htmlFor="chatgpt-apply-path">保存パス（プロジェクト相対）</label>
+              <input
+                id="chatgpt-apply-path"
+                value={vm.applyFilePath}
+                onChange={(e) => vm.setApplyFilePath(e.target.value)}
+                placeholder="ai-output/chatgpt-latest.md"
+              />
+            </div>
+          )}
+          <button
+            type="button"
+            className="primary apply-latest-btn"
+            disabled={vm.applying || !vm.latestAssistantContent || !vm.canApplyFile}
+            onClick={() => void vm.applyLatest()}
+            title={!vm.canApplyFile ? 'プロジェクトを開いてください' : undefined}
+          >
+            {vm.applying ? '反映中…' : `最新を反映 → ${targetLabel}`}
+          </button>
+        </div>
+        <p className="apply-hint">{vm.applyTargetMeta.hint}</p>
+        {vm.applyTarget === 'file' && !vm.projectPath && (
+          <p className="apply-hint warn">ファイル反映には、先にプロジェクトを開いてください</p>
+        )}
+      </section>
+
       <div className="chatgpt-layout">
         <aside className="panel chatgpt-sidebar">
           <button type="button" className="primary" onClick={() => void vm.newChat()}>
@@ -59,6 +116,7 @@ export function ChatGptView({ app }: Props) {
             placeholder="チャット検索…"
             value={vm.search}
             onChange={(e) => vm.setSearch(e.target.value)}
+            aria-label="チャット検索"
           />
           <div className="chat-thread-list">
             {vm.threads.map((t) => (
@@ -69,7 +127,7 @@ export function ChatGptView({ app }: Props) {
                 onClick={() => void vm.selectThread(t.id)}
               >
                 <strong>{t.title}</strong>
-                <span className="meta">{t.mode}</span>
+                <span className="meta">{vm.modeLabel(t.mode)}</span>
               </button>
             ))}
             {vm.threads.length === 0 && <div className="empty">履歴はありません</div>}
@@ -91,7 +149,11 @@ export function ChatGptView({ app }: Props) {
 
           <div className="chatgpt-log">
             {vm.messages.length === 0 ? (
-              <div className="empty">メッセージを入力して送信してください</div>
+              <div className="empty chatgpt-empty">
+                メッセージを入力して送信してください。
+                <br />
+                AI 返答の「反映」で、上で選んだ反映先へそのまま送れます。
+              </div>
             ) : (
               vm.messages.map((m) => (
                 <div key={m.id} className={`chat-bubble ${m.role}`}>
@@ -100,10 +162,21 @@ export function ChatGptView({ app }: Props) {
                     className="chat-content md-body"
                     dangerouslySetInnerHTML={{ __html: renderSimpleMarkdown(m.content) }}
                   />
-                  <div className="row" style={{ marginTop: '0.35rem' }}>
+                  <div className="row chat-bubble-actions">
                     <button type="button" className="ghost" onClick={() => void vm.copy(m.content)}>
                       コピー
                     </button>
+                    {m.role === 'assistant' && m.status !== 'streaming' && (
+                      <button
+                        type="button"
+                        className="primary"
+                        disabled={vm.applying || !m.content.trim() || !vm.canApplyFile}
+                        onClick={() => void vm.applyContent(m.content)}
+                        title={!vm.canApplyFile ? 'プロジェクトを開いてください' : `反映先: ${targetLabel}`}
+                      >
+                        {vm.applying ? '反映中…' : `反映 → ${targetLabel}`}
+                      </button>
+                    )}
                     {m.status === 'streaming' && <span className="meta">生成中…</span>}
                   </div>
                 </div>
@@ -120,7 +193,6 @@ export function ChatGptView({ app }: Props) {
             }}
           >
             <textarea
-              ref={textareaRef}
               value={vm.draft}
               rows={3}
               placeholder="メッセージ…（Enter 送信 / Shift+Enter 改行）"

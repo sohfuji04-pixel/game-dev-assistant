@@ -13,6 +13,7 @@ export type AppPage =
   | 'blender'
   | 'unity'
   | 'prompt-builder'
+  | 'ui-create-ai'
   | 'image-ai'
   | 'vision-ai'
   | 'cursor'
@@ -31,6 +32,7 @@ export class AppViewModel extends ViewModelBase {
   version = '';
   busyMessage = '';
   errorMessage = '';
+  private flashTimer: ReturnType<typeof setTimeout> | null = null;
   /** 創作ツールハブへ遷移時に自動オープンするツール ID */
   hubPendingToolId: string | null = null;
   /** ハブ内で開いているツール ID（サイドバー強調用） */
@@ -67,6 +69,20 @@ export class AppViewModel extends ViewModelBase {
   dispose(): void {
     for (const u of this.unsubs) u();
     this.unsubs = [];
+    if (this.flashTimer) clearTimeout(this.flashTimer);
+  }
+
+  /** 画面横断の短いステータス表示 */
+  flashMessage(message: string, ms = 3200): void {
+    if (this.flashTimer) clearTimeout(this.flashTimer);
+    this.busyMessage = message;
+    this.notify();
+    this.flashTimer = setTimeout(() => {
+      if (this.busyMessage === message) {
+        this.busyMessage = '';
+        this.notify();
+      }
+    }, ms);
   }
 
   setPage(page: AppPage): void {

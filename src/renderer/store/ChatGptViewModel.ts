@@ -1,5 +1,5 @@
 /**
- * ChatGPT ViewModel
+ * ChatGPT ViewModel — 返答の反映先指定対応
  */
 import { ApiClient } from '../services/ApiClient';
 import { ViewModelBase } from './ViewModelBase';
@@ -18,6 +18,45 @@ export const CHAT_MODE_OPTIONS: Array<{ id: AiChatMode; label: string }> = [
   { id: 'vision', label: '画像解析' },
 ];
 
+const MODE_LABEL = Object.fromEntries(CHAT_MODE_OPTIONS.map((m) => [m.id, m.label])) as Record<
+  AiChatMode,
+  string
+>;
+
+/** GPT 返答の反映先 */
+export type ChatApplyTarget = 'clipboard' | 'cursor' | 'blender' | 'unity' | 'file';
+
+export const CHAT_APPLY_TARGETS: Array<{ id: ChatApplyTarget; label: string; hint: string }> = [
+  { id: 'clipboard', label: 'クリップボード', hint: '返答テキストをそのままコピーします' },
+  { id: 'cursor', label: 'Cursor', hint: 'コピーして Cursor にプロンプトとして送ります' },
+  { id: 'blender', label: 'Blender AI', hint: 'Blender AI へ転送し、そのまま実行します' },
+  { id: 'unity', label: 'Unity AI', hint: 'Unity AI へ転送し、そのまま実行します' },
+  { id: 'file', label: 'プロジェクトファイル', hint: '開いているプロジェクト内の相対パスへ書き込みます' },
+];
+
+const STORAGE_TARGET = 'gda.chatgpt.applyTarget';
+const STORAGE_FILE = 'gda.chatgpt.applyFilePath';
+
+function readStoredTarget(): ChatApplyTarget {
+  try {
+    const v = localStorage.getItem(STORAGE_TARGET);
+    if (CHAT_APPLY_TARGETS.some((t) => t.id === v)) return v as ChatApplyTarget;
+  } catch {
+    /* ignore */
+  }
+  return 'clipboard';
+}
+
+function readStoredFilePath(): string {
+  try {
+    return localStorage.getItem(STORAGE_FILE) || 'ai-output/chatgpt-latest.md';
+  } catch {
+    return 'ai-output/chatgpt-latest.md';
+  }
+}
+
+export type BannerKind = 'info' | 'success' | 'error' | 'warn';
+
 export class ChatGptViewModel extends ViewModelBase {
   threads: ChatThread[] = [];
   messages: ChatMessage[] = [];
@@ -26,8 +65,16 @@ export class ChatGptViewModel extends ViewModelBase {
   draft = '';
   search = '';
   busy = false;
+  applying = false;
   message = '';
+  messageKind: BannerKind = 'info';
+  /** 反映先 */
+  applyTarget: ChatApplyTarget = readStoredTarget();
+  /** ファイル反映時の相対パス */
+  applyFilePath = readStoredFilePath();
   private unsub: (() => void) | null = null;
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
+  private bannerTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private readonly app: AppViewModel) {
     super();
@@ -39,6 +86,28 @@ export class ChatGptViewModel extends ViewModelBase {
 
   get activeThread(): ChatThread | null {
     return this.threads.find((t) => t.id === this.activeThreadId) ?? null;
+  }
+
+  get latestAssistantContent(): string | null {
+    for (let i = this.messages.length - 1; i >= 0; i--) {
+      const m = this.messages[i];
+      if (m.role === 'assistant' && m.status !== 'streaming' && m.content.trim()) {
+        return m.content;
+      }
+    }
+    return null;
+  }
+
+  get applyTargetMeta() {
+    return CHAT_APPLY_TARGETS.find((t) => t.id === this.applyTarget) ?? CHAT_APPLY_TARGETS[0];
+  }
+
+  get canApplyFile(): boolean {
+    return this.applyTarget !== 'file' || Boolean(this.projectPath);
+  }
+
+  modeLabel(mode: AiChatMode): string {
+    return MODE_LABEL[mode] ?? mode;
   }
 
   async load(): Promise<void> {
@@ -80,6 +149,22 @@ export class ChatGptViewModel extends ViewModelBase {
   dispose(): void {
     this.unsub?.();
     this.unsub = null;
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    if (this.bannerTimer) clearTimeout(this.bannerTimer);
+  }
+
+  private setBanner(text: string, kind: BannerKind = 'info', autoClearMs = 0): void {
+    if (this.bannerTimer) clearTimeout(this.bannerTimer);
+    this.message = text;
+    this.messageKind = kind;
+    if (autoClearMs > 0) {
+      this.bannerTimer = setTimeout(() => {
+        if (this.message === text) {
+          this.message = '';
+          this.notify();
+        }
+      }, autoClearMs);
+    }
   }
 
   async refreshThreads(): Promise<void> {
@@ -90,11 +175,34 @@ export class ChatGptViewModel extends ViewModelBase {
   setSearch(value: string): void {
     this.search = value;
     this.notify();
-    void this.refreshThreads();
+    if (this.searchTimer) clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => {
+      void this.refreshThreads();
+    }, 220);
   }
 
   setDraft(value: string): void {
     this.draft = value;
+    this.notify();
+  }
+
+  setApplyTarget(target: ChatApplyTarget): void {
+    this.applyTarget = target;
+    try {
+      localStorage.setItem(STORAGE_TARGET, target);
+    } catch {
+      /* ignore */
+    }
+    this.notify();
+  }
+
+  setApplyFilePath(value: string): void {
+    this.applyFilePath = value;
+    try {
+      localStorage.setItem(STORAGE_FILE, value);
+    } catch {
+      /* ignore */
+    }
     this.notify();
   }
 
@@ -142,7 +250,6 @@ export class ChatGptViewModel extends ViewModelBase {
     this.draft = '';
     this.busy = true;
     this.message = '';
-    // 先行表示
     this.messages = [
       ...this.messages,
       {
@@ -160,7 +267,7 @@ export class ChatGptViewModel extends ViewModelBase {
       this.messages = await ApiClient.chatMessages(threadId);
       await this.refreshThreads();
     } catch (error) {
-      this.message = error instanceof Error ? error.message : String(error);
+      this.setBanner(error instanceof Error ? error.message : String(error), 'error');
       this.busy = false;
       this.messages = await ApiClient.chatMessages(threadId);
     }
@@ -182,7 +289,7 @@ export class ChatGptViewModel extends ViewModelBase {
       await ApiClient.chatRegenerate(this.activeThreadId, this.projectPath);
       this.messages = await ApiClient.chatMessages(this.activeThreadId);
     } catch (error) {
-      this.message = error instanceof Error ? error.message : String(error);
+      this.setBanner(error instanceof Error ? error.message : String(error), 'error');
       this.busy = false;
     }
     this.notify();
@@ -190,7 +297,79 @@ export class ChatGptViewModel extends ViewModelBase {
 
   async copy(text: string): Promise<void> {
     await navigator.clipboard.writeText(text);
-    this.message = 'コピーしました';
+    this.setBanner('コピーしました', 'success', 2200);
     this.notify();
+  }
+
+  /** 最新の AI 返答を反映 */
+  async applyLatest(): Promise<void> {
+    const content = this.latestAssistantContent;
+    if (!content) {
+      this.setBanner('反映できる AI 返答がありません', 'warn', 2800);
+      this.notify();
+      return;
+    }
+    await this.applyContent(content);
+  }
+
+  /** 指定テキストを反映先へそのまま送る */
+  async applyContent(content: string): Promise<void> {
+    const text = content.trim();
+    if (!text || this.applying) return;
+    this.applying = true;
+    this.message = '';
+    this.notify();
+    try {
+      switch (this.applyTarget) {
+        case 'clipboard':
+          await navigator.clipboard.writeText(text);
+          this.setBanner('クリップボードへ反映しました', 'success', 2500);
+          break;
+        case 'cursor': {
+          await navigator.clipboard.writeText(text);
+          const res = await ApiClient.cursorSendPrompt(text, this.projectPath ?? undefined);
+          if (res.success) {
+            this.setBanner('Cursor へ反映しました（履歴保存・起動。必要なら貼り付け）', 'success', 3500);
+          } else {
+            this.setBanner(res.message, 'warn', 4000);
+          }
+          break;
+        }
+        case 'blender': {
+          await ApiClient.blenderChatSend(text);
+          this.app.setPage('blender');
+          this.app.flashMessage('ChatGPT の返答を Blender AI へ反映して実行しました');
+          break;
+        }
+        case 'unity': {
+          await ApiClient.unityChatSend(text);
+          this.app.setPage('unity');
+          this.app.flashMessage('ChatGPT の返答を Unity AI へ反映して実行しました');
+          break;
+        }
+        case 'file': {
+          const root = this.projectPath;
+          if (!root) {
+            this.setBanner('ファイル反映にはプロジェクトを開いてください', 'warn', 3500);
+            break;
+          }
+          const rel = this.applyFilePath.trim() || 'ai-output/chatgpt-latest.md';
+          const res = await ApiClient.projectWriteText({
+            projectRoot: root,
+            relativePath: rel,
+            content: text,
+          });
+          this.setBanner(res.message, res.success ? 'success' : 'error', res.success ? 3200 : 0);
+          break;
+        }
+        default:
+          this.setBanner('未対応の反映先です', 'error');
+      }
+    } catch (error) {
+      this.setBanner(error instanceof Error ? error.message : String(error), 'error');
+    } finally {
+      this.applying = false;
+      this.notify();
+    }
   }
 }

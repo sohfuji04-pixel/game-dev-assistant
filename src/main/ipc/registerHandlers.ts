@@ -3,9 +3,10 @@
  * レンダラーの ViewModel から呼び出される Model 層の窓口。
  */
 import { app, dialog, ipcMain, shell, type BrowserWindow } from 'electron';
+import fs from 'node:fs';
 import path from 'node:path';
 import { IpcChannels } from '../../shared/ipcChannels';
-import type { AppSettings, AssetType, AiChatMode } from '../../shared/types';
+import type { AppSettings, AssetType, AiChatMode, UiCreateAiRequest } from '../../shared/types';
 import { GAME_TEMPLATES } from '../../shared/blender/templates';
 import { UNITY_QUICK_COMMANDS } from '../../shared/unity/unityMethods';
 import type { AppServices } from '../main';
@@ -28,6 +29,7 @@ export function registerIpcHandlers(services: AppServices, getWindow: GetWindow)
     secrets,
     chatGpt,
     promptBuilder,
+    uiCreateAi,
     projectMemory,
     watcher,
     updater,
@@ -134,6 +136,16 @@ export function registerIpcHandlers(services: AppServices, getWindow: GetWindow)
   ipcMain.handle(
     IpcChannels.CURSOR_SEND_PROMPT,
     (_e, prompt: string, folderPath?: string) => cursor.sendPromptToCursor(prompt, folderPath),
+  );
+
+  // --- UI 作成 AI ---
+  ipcMain.handle(IpcChannels.UI_CREATE_THEMES, () => uiCreateAi.listThemes());
+  ipcMain.handle(IpcChannels.UI_CREATE_SCREENS, () => uiCreateAi.listScreens());
+  ipcMain.handle(IpcChannels.UI_CREATE_GENERATE, (_e, input: UiCreateAiRequest) =>
+    uiCreateAi.generate(input),
+  );
+  ipcMain.handle(IpcChannels.UI_CREATE_REVIEW, (_e, markdown: string) =>
+    uiCreateAi.reviewMarkdown(markdown),
   );
 
   // --- Project Memory ---
@@ -368,6 +380,31 @@ export function registerIpcHandlers(services: AppServices, getWindow: GetWindow)
   ipcMain.handle(IpcChannels.PROJECT_REVEAL, async (_e, targetPath: string) => {
     await shell.showItemInFolder(targetPath);
   });
+  ipcMain.handle(
+    IpcChannels.PROJECT_WRITE_TEXT,
+    async (
+      _e,
+      payload: { projectRoot: string; relativePath: string; content: string },
+    ): Promise<{ success: boolean; message: string; absolutePath?: string }> => {
+      const root = path.resolve(payload.projectRoot || '');
+      const rel = (payload.relativePath || '').replace(/\\/g, '/').replace(/^\/+/, '');
+      if (!root || !fs.existsSync(root)) {
+        return { success: false, message: 'プロジェクトフォルダがありません' };
+      }
+      if (!rel || rel.includes('..')) {
+        return { success: false, message: '不正な相対パスです' };
+      }
+      const absolute = path.resolve(root, ...rel.split('/'));
+      const prefix = root.endsWith(path.sep) ? root : root + path.sep;
+      if (absolute !== root && !absolute.toLowerCase().startsWith(prefix.toLowerCase())) {
+        return { success: false, message: 'プロジェクト外への書き込みは禁止されています' };
+      }
+      fs.mkdirSync(path.dirname(absolute), { recursive: true });
+      fs.writeFileSync(absolute, payload.content ?? '', 'utf-8');
+      log.info('project', 'テキスト書き込み', absolute);
+      return { success: true, message: `保存しました: ${rel}`, absolutePath: absolute };
+    },
+  );
   ipcMain.handle(IpcChannels.HUB_OPEN_EXTERNAL, async (_e, url: string, projectRoot?: string) => {
     await hub.openInExternalBrowser(url, projectRoot);
   });
